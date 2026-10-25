@@ -9,7 +9,7 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 ## Sumário das Etapas
 
 - [x] **T00 — Diagnóstico do repositório, documentação técnica e decisões de arquitetura** `[CONCLUÍDA]`
-- [ ] **T01 — Base da aplicação, layout responsivo, rotas e tema** `[PENDENTE]`
+- [x] **T01 — Base da aplicação, layout responsivo, rotas e tema** `[CONCLUÍDA]`
 - [ ] **T02 — Autenticação Firebase e proteção de rotas** `[PENDENTE]`
 - [ ] **T03 — Modelo de dados Firestore e regras de segurança** `[PENDENTE]`
 - [ ] **T04 — Biblioteca de músicas, cadastro, pesquisa e visualização** `[PENDENTE]`
@@ -55,26 +55,33 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 
 ---
 
-### [ ] T01 — Base da Aplicação, Layout Responsivo, Rotas e Tema
-- **Estado**: `PENDENTE`
+### [x] T01 — Base da Aplicação, Layout Responsivo, Rotas e Tema
+- **Estado**: `CONCLUÍDA`
 - **Objetivo**: Inicializar projeto React + TypeScript + Vite + Tailwind CSS com arquitetura modular, sistema de rotas (React Router), layout responsivo (Desktop/Tablet/Mobile), tema claro/escuro e navegação principal.
 - **Dependências**: T00.
 - **Subtarefas**:
-  - [ ] Inicializar projeto Vite com template React-TS.
-  - [ ] Configurar Tailwind CSS, PostCSS e estilos globais com tipografia moderna.
-  - [ ] Instalar e configurar `lucide-react` para ícones de interface.
-  - [ ] Configurar estrutura de pastas (`src/components`, `src/features`, `src/lib`, `src/types`, `src/hooks`).
-  - [ ] Implementar `ThemeContext` (claro, escuro, sistema).
-  - [ ] Configurar React Router com rotas-base: Home/Dashboard, Biblioteca, Playlists, Importar, Modo Palco, Patrocínio, Configurações e Login.
-  - [ ] Implementar Navbar responsiva com menu hambúrguer para dispositivos móveis.
-  - [ ] Criar scripts `npm run lint`, `npm run typecheck`, `npm run test` e `npm run build`.
+  - [x] Inicializar projeto Vite com template React-TS.
+  - [x] Configurar Tailwind CSS, PostCSS e estilos globais com tipografia moderna.
+  - [x] Instalar e configurar `lucide-react` para ícones de interface.
+  - [x] Configurar estrutura de pastas (`src/components`, `src/features`, `src/lib`, `src/types`, `src/hooks`, `src/contexts`).
+  - [x] Implementar `ThemeContext` e hook `useTheme` (claro, escuro, sistema).
+  - [x] Configurar React Router com rotas-base: Home/Dashboard, Biblioteca, Playlists, Importar, Modo Palco, Modo Igreja, Modo Barzinho, Patrocínio, Configurações e Login.
+  - [x] Implementar Navbar responsiva com menu hambúrguer para dispositivos móveis e rodapé com garantia de custo zero.
+  - [x] Criar scripts `npm run lint`, `npm run typecheck`, `npm run test` e `npm run build`.
 - **Testes Obrigatórios**:
-  - [ ] `npm run typecheck` sem erros de TypeScript.
-  - [ ] `npm run build` gerando bundle estático com sucesso.
-  - [ ] Teste de navegação entre rotas e alternância de tema no desktop e mobile.
+  - [x] `npm run typecheck` sem erros de TypeScript (Executado: 0 erros).
+  - [x] `npm run lint` sem erros (Executado: 0 erros, 0 avisos).
+  - [x] `npm run test` com Vitest cobrindo temas, navegação e ordem litúrgica (Executado: 3 arquivos, 5 testes 100% aprovados).
+  - [x] `npm run build` gerando bundle estático com sucesso (Executado: 303.80 kB JS, 39.36 kB CSS gerados em 2.15s).
+  - [x] Inspeção visual via Browser Subagent testando Dashboard, alternância de temas, Biblioteca, Modo Palco com autoscroll e viewport móvel (375x667).
 - **Critérios de Aceite**:
   - Telas-base navegáveis sem erros de console.
   - Layout fluido e responsivo em viewports móveis (375px) e desktop (1280px+).
+  - Tema escuro de alto contraste operacional.
+- **Resultados dos Testes e Observações**:
+  - Testes automatizados: 100% aprovados.
+  - Gravação de verificação visual salva em `t01_interface_verification_1792900250799.webp`.
+  - Custo financeiro: R$ 0,00 (Nenhum serviço pago ativado).
 
 ---
 
