@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Navbar } from '../components/layout/Navbar';
 import { ThemeProvider } from '../contexts/ThemeContext';
+import { AuthContext } from '../contexts/auth-context';
 import { describe, it, expect } from 'vitest';
 
 describe('Navbar Component', () => {
@@ -9,7 +10,18 @@ describe('Navbar Component', () => {
     render(
       <MemoryRouter>
         <ThemeProvider>
-          <Navbar />
+          <AuthContext.Provider value={{
+            user: null,
+            loading: false,
+            isAuthenticated: false,
+            configurationMissing: false,
+            login: async () => undefined,
+            register: async () => undefined,
+            logout: async () => undefined,
+            resetPassword: async () => undefined,
+          }}>
+            <Navbar />
+          </AuthContext.Provider>
         </ThemeProvider>
       </MemoryRouter>
     );

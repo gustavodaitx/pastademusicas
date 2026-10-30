@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { AppLayout } from '../components/layout/AppLayout';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { LibraryPage } from '../features/library/LibraryPage';
@@ -11,6 +12,9 @@ import { SponsorshipPage } from '../features/sponsorship/SponsorshipPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { LoginPage } from '../features/auth/LoginPage';
 import { NotFoundPage } from '../features/not-found/NotFoundPage';
+import { ProtectedRoute } from '../components/auth/ProtectedRoute';
+
+const protect = (element: ReactNode) => <ProtectedRoute>{element}</ProtectedRoute>;
 
 export const router = createBrowserRouter([
   {
@@ -23,31 +27,31 @@ export const router = createBrowserRouter([
       },
       {
         path: 'biblioteca',
-        element: <LibraryPage />,
+        element: protect(<LibraryPage />),
       },
       {
         path: 'playlists',
-        element: <PlaylistsPage />,
+        element: protect(<PlaylistsPage />),
       },
       {
         path: 'importar',
-        element: <ImportMusicPage />,
+        element: protect(<ImportMusicPage />),
       },
       {
         path: 'modo-igreja',
-        element: <ChurchModePage />,
+        element: protect(<ChurchModePage />),
       },
       {
         path: 'modo-barzinho',
-        element: <BarModePage />,
+        element: protect(<BarModePage />),
       },
       {
         path: 'patrocinio',
-        element: <SponsorshipPage />,
+        element: protect(<SponsorshipPage />),
       },
       {
         path: 'configuracoes',
-        element: <SettingsPage />,
+        element: protect(<SettingsPage />),
       },
       {
         path: 'login',
@@ -62,6 +66,6 @@ export const router = createBrowserRouter([
   {
     // Stage mode runs full viewport with its own custom stage header
     path: 'palco',
-    element: <StageModePage />,
+    element: protect(<StageModePage />),
   },
 ]);

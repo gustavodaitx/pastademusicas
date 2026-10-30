@@ -15,14 +15,24 @@ import {
   Monitor, 
   Menu, 
   X,
-  User
+  User,
+  LogOut,
 } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
+import { useAuth } from '../../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 export const Navbar: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/', { replace: true });
+  };
 
   const navLinks = [
     { to: '/', label: 'Início', icon: Music },
@@ -138,14 +148,10 @@ export const Navbar: React.FC = () => {
             </Link>
 
             {/* Auth Login */}
-            <Link
-              to="/login"
-              id="nav-login"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              <User className="w-4 h-4" />
-              <span className="hidden sm:inline">Entrar</span>
-            </Link>
+            {user ? <div className="flex items-center gap-2">
+              <span className="hidden xl:inline max-w-32 truncate text-xs text-slate-600 dark:text-slate-300" title={user.displayName || user.email || ''}>{user.displayName || user.email}</span>
+              <button type="button" onClick={handleLogout} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Sair"><LogOut className="w-4 h-4" /><span className="hidden sm:inline">Sair</span></button>
+            </div> : <Link to="/login" id="nav-login" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"><User className="w-4 h-4" /><span className="hidden sm:inline">Entrar</span></Link>}
 
             {/* Mobile menu hamburger button */}
             <button

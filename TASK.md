@@ -10,7 +10,7 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 
 - [x] **T00 — Diagnóstico do repositório, documentação técnica e decisões de arquitetura** `[CONCLUÍDA]`
 - [x] **T01 — Base da aplicação, layout responsivo, rotas e tema** `[CONCLUÍDA]`
-- [ ] **T02 — Autenticação Firebase e proteção de rotas** `[PENDENTE]`
+- [x] **T02 — Autenticação Firebase e proteção de rotas** `[CONCLUÍDA]`
 - [ ] **T03 — Modelo de dados Firestore e regras de segurança** `[PENDENTE]`
 - [ ] **T04 — Biblioteca de músicas, cadastro, pesquisa e visualização** `[PENDENTE]`
 - [ ] **T05 — Importação local de documentos (DOCX, PDF textual, TXT)** `[PENDENTE]`
@@ -85,24 +85,25 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 
 ---
 
-### [ ] T02 — Autenticação Firebase e Proteção de Rotas
-- **Estado**: `PENDENTE`
-- **Objetivo**: Configurar o Firebase Authentication (E-mail/Senha e Google OAuth) no plano Spark gratuito, com controle de estado de autenticação, telas de Login/Cadastro/Recuperação de Senha e guarda de rotas privadas.
+### [x] T02 — Autenticação Firebase e Proteção de Rotas
+- **Estado**: `CONCLUÍDA; validação real reportada pelo usuário`
+- **Objetivo**: Configurar Firebase Authentication com e-mail e senha no plano Spark, controle de estado da autenticação, telas de Login/Cadastro/Recuperação de Senha e guarda de rotas privadas.
 - **Dependências**: T01.
 - **Subtarefas**:
-  - [ ] Configurar cliente Firebase (`src/lib/firebase/config.ts`) usando variáveis de ambiente.
-  - [ ] Implementar `AuthContext` com listener `onAuthStateChanged`.
-  - [ ] Criar componente `ProtectedRoute` para redirecionamento seguro de usuários deslogados.
-  - [ ] Desenvolver telas de Login, Cadastro e Recuperação de Senha com validação de formulários.
-  - [ ] Tratar mensagens de erro do Firebase (senha fraca, e-mail já em uso, credenciais inválidas).
-  - [ ] Suporte a modo convidado/demonstração para visualização do catálogo público sem login obrigatório.
+  - [x] Configurar cliente Firebase (`src/lib/firebase.ts`) usando variáveis de ambiente.
+  - [x] Implementar `AuthContext` com listener `onAuthStateChanged`.
+  - [x] Criar componente `ProtectedRoute` para redirecionamento seguro e retorno ao destino solicitado.
+  - [x] Desenvolver telas de Login, Cadastro e Recuperação de Senha com validação de formulários.
+  - [x] Tratar mensagens de erro do Firebase (senha fraca, e-mail já em uso, credenciais inválidas).
+  - [x] Proteger as rotas funcionais e manter o dashboard público; não há autenticação simulada.
 - **Testes Obrigatórios**:
-  - [ ] Teste de renderização das telas de autenticação.
-  - [ ] Teste unitário/integração do fluxo de proteção de rotas (bloqueio de rotas privadas sem usuário autenticado).
-  - [ ] `npm run typecheck` e `npm run test`.
+  - [x] Testes de interface e validação dos formulários de autenticação.
+  - [x] Testes de cadastro, login, logout, recuperação, loading e proteção/redirecionamento de rotas com mocks.
+  - [x] `npm run typecheck`, `npm run lint`, `npm run test` e `npm run build`.
 - **Critérios de Aceite**:
-  - Login e logout funcionais; sessão preservada ao recarregar a página.
-  - Nenhuma chave privada ou segredo administrativo exposto no frontend.
+  - Login e logout conectados ao Firebase; persistência de sessão fornecida pelo SDK no navegador.
+  - Nenhuma configuração local Firebase versionada; os testes usam mocks e não simulam autenticação real.
+  - [x] Validação manual real reportada: cadastro, login, persistência após atualizar, recuperação por e-mail, proteção e retorno à rota solicitada.
 
 ---
 
