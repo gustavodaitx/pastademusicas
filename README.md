@@ -62,7 +62,7 @@ Este projeto foi concebido e estruturado para ter **custo zero permanente**.
 git clone <url-do-repositorio>
 
 # Crie seu arquivo de variáveis de ambiente a partir do exemplo
-cp .env.example .env
+cp .env.example .env.local
 
 # Instale as dependências
 npm install
@@ -78,3 +78,11 @@ npm run lint         # Verificação de padrões de código
 npm run test         # Execução dos testes unitários
 npm run build        # Geração do bundle de produção
 ```
+
+## Autenticação Firebase (T02)
+
+A autenticação usa Firebase Authentication com e-mail e senha no plano Spark. Crie um projeto Firebase exclusivo para Pasta de Música, cadastre um aplicativo Web e habilite **Authentication > Sign-in method > E-mail/senha**. Em **Authentication > Settings > Authorized domains**, confira os domínios usados localmente e na hospedagem. Em **Configurações do projeto > Seus aplicativos**, copie a configuração do aplicativo Web.
+
+Na raiz do projeto, copie `.env.example` para `.env.local` e preencha as seis variáveis `VITE_FIREBASE_*` com os valores desse projeto. O `.env.local` é ignorado pelo Git. Reinicie `npm run dev` após editar as variáveis. Sem configuração, a tela de login informa o que falta e não simula autenticação.
+
+As rotas Biblioteca, Playlists, Importar, Igreja, Barzinho, Palco, Patrocínio e Configurações exigem login. O dashboard em `/` e a tela `/login` permanecem públicos.

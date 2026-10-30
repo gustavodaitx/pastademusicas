@@ -9,8 +9,8 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 ## Sumário das Etapas
 
 - [x] **T00 — Diagnóstico do repositório, documentação técnica e decisões de arquitetura** `[CONCLUÍDA]`
-- [ ] **T01 — Base da aplicação, layout responsivo, rotas e tema** `[PENDENTE]`
-- [ ] **T02 — Autenticação Firebase e proteção de rotas** `[PENDENTE]`
+- [x] **T01 — Base da aplicação, layout responsivo, rotas e tema** `[CONCLUÍDA]`
+- [x] **T02 — Autenticação Firebase e proteção de rotas** `[CONCLUÍDA]`
 - [ ] **T03 — Modelo de dados Firestore e regras de segurança** `[PENDENTE]`
 - [ ] **T04 — Biblioteca de músicas, cadastro, pesquisa e visualização** `[PENDENTE]`
 - [ ] **T05 — Importação local de documentos (DOCX, PDF textual, TXT)** `[PENDENTE]`
@@ -55,47 +55,55 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 
 ---
 
-### [ ] T01 — Base da Aplicação, Layout Responsivo, Rotas e Tema
-- **Estado**: `PENDENTE`
+### [x] T01 — Base da Aplicação, Layout Responsivo, Rotas e Tema
+- **Estado**: `CONCLUÍDA`
 - **Objetivo**: Inicializar projeto React + TypeScript + Vite + Tailwind CSS com arquitetura modular, sistema de rotas (React Router), layout responsivo (Desktop/Tablet/Mobile), tema claro/escuro e navegação principal.
 - **Dependências**: T00.
 - **Subtarefas**:
-  - [ ] Inicializar projeto Vite com template React-TS.
-  - [ ] Configurar Tailwind CSS, PostCSS e estilos globais com tipografia moderna.
-  - [ ] Instalar e configurar `lucide-react` para ícones de interface.
-  - [ ] Configurar estrutura de pastas (`src/components`, `src/features`, `src/lib`, `src/types`, `src/hooks`).
-  - [ ] Implementar `ThemeContext` (claro, escuro, sistema).
-  - [ ] Configurar React Router com rotas-base: Home/Dashboard, Biblioteca, Playlists, Importar, Modo Palco, Patrocínio, Configurações e Login.
-  - [ ] Implementar Navbar responsiva com menu hambúrguer para dispositivos móveis.
-  - [ ] Criar scripts `npm run lint`, `npm run typecheck`, `npm run test` e `npm run build`.
+  - [x] Inicializar projeto Vite com template React-TS.
+  - [x] Configurar Tailwind CSS, PostCSS e estilos globais com tipografia moderna.
+  - [x] Instalar e configurar `lucide-react` para ícones de interface.
+  - [x] Configurar estrutura de pastas (`src/components`, `src/features`, `src/lib`, `src/types`, `src/hooks`, `src/contexts`).
+  - [x] Implementar `ThemeContext` e hook `useTheme` (claro, escuro, sistema).
+  - [x] Configurar React Router com rotas-base: Home/Dashboard, Biblioteca, Playlists, Importar, Modo Palco, Modo Igreja, Modo Barzinho, Patrocínio, Configurações e Login.
+  - [x] Implementar Navbar responsiva com menu hambúrguer para dispositivos móveis e rodapé com garantia de custo zero.
+  - [x] Criar scripts `npm run lint`, `npm run typecheck`, `npm run test` e `npm run build`.
 - **Testes Obrigatórios**:
-  - [ ] `npm run typecheck` sem erros de TypeScript.
-  - [ ] `npm run build` gerando bundle estático com sucesso.
-  - [ ] Teste de navegação entre rotas e alternância de tema no desktop e mobile.
+  - [x] `npm run typecheck` sem erros de TypeScript (Executado: 0 erros).
+  - [x] `npm run lint` sem erros (Executado: 0 erros, 0 avisos).
+  - [x] `npm run test` com Vitest cobrindo temas, navegação e ordem litúrgica (Executado: 3 arquivos, 5 testes 100% aprovados).
+  - [x] `npm run build` gerando bundle estático com sucesso (Executado: 303.80 kB JS, 39.36 kB CSS gerados em 2.15s).
+  - [x] Inspeção visual via Browser Subagent testando Dashboard, alternância de temas, Biblioteca, Modo Palco com autoscroll e viewport móvel (375x667).
 - **Critérios de Aceite**:
   - Telas-base navegáveis sem erros de console.
   - Layout fluido e responsivo em viewports móveis (375px) e desktop (1280px+).
+  - Tema escuro de alto contraste operacional.
+- **Resultados dos Testes e Observações**:
+  - Testes automatizados: 100% aprovados.
+  - Gravação de verificação visual salva em `t01_interface_verification_1792900250799.webp`.
+  - Custo financeiro: R$ 0,00 (Nenhum serviço pago ativado).
 
 ---
 
-### [ ] T02 — Autenticação Firebase e Proteção de Rotas
-- **Estado**: `PENDENTE`
-- **Objetivo**: Configurar o Firebase Authentication (E-mail/Senha e Google OAuth) no plano Spark gratuito, com controle de estado de autenticação, telas de Login/Cadastro/Recuperação de Senha e guarda de rotas privadas.
+### [x] T02 — Autenticação Firebase e Proteção de Rotas
+- **Estado**: `CONCLUÍDA; validação real reportada pelo usuário`
+- **Objetivo**: Configurar Firebase Authentication com e-mail e senha no plano Spark, controle de estado da autenticação, telas de Login/Cadastro/Recuperação de Senha e guarda de rotas privadas.
 - **Dependências**: T01.
 - **Subtarefas**:
-  - [ ] Configurar cliente Firebase (`src/lib/firebase/config.ts`) usando variáveis de ambiente.
-  - [ ] Implementar `AuthContext` com listener `onAuthStateChanged`.
-  - [ ] Criar componente `ProtectedRoute` para redirecionamento seguro de usuários deslogados.
-  - [ ] Desenvolver telas de Login, Cadastro e Recuperação de Senha com validação de formulários.
-  - [ ] Tratar mensagens de erro do Firebase (senha fraca, e-mail já em uso, credenciais inválidas).
-  - [ ] Suporte a modo convidado/demonstração para visualização do catálogo público sem login obrigatório.
+  - [x] Configurar cliente Firebase (`src/lib/firebase.ts`) usando variáveis de ambiente.
+  - [x] Implementar `AuthContext` com listener `onAuthStateChanged`.
+  - [x] Criar componente `ProtectedRoute` para redirecionamento seguro e retorno ao destino solicitado.
+  - [x] Desenvolver telas de Login, Cadastro e Recuperação de Senha com validação de formulários.
+  - [x] Tratar mensagens de erro do Firebase (senha fraca, e-mail já em uso, credenciais inválidas).
+  - [x] Proteger as rotas funcionais e manter o dashboard público; não há autenticação simulada.
 - **Testes Obrigatórios**:
-  - [ ] Teste de renderização das telas de autenticação.
-  - [ ] Teste unitário/integração do fluxo de proteção de rotas (bloqueio de rotas privadas sem usuário autenticado).
-  - [ ] `npm run typecheck` e `npm run test`.
+  - [x] Testes de interface e validação dos formulários de autenticação.
+  - [x] Testes de cadastro, login, logout, recuperação, loading e proteção/redirecionamento de rotas com mocks.
+  - [x] `npm run typecheck`, `npm run lint`, `npm run test` e `npm run build`.
 - **Critérios de Aceite**:
-  - Login e logout funcionais; sessão preservada ao recarregar a página.
-  - Nenhuma chave privada ou segredo administrativo exposto no frontend.
+  - Login e logout conectados ao Firebase; persistência de sessão fornecida pelo SDK no navegador.
+  - Nenhuma configuração local Firebase versionada; os testes usam mocks e não simulam autenticação real.
+  - [x] Validação manual real reportada: cadastro, login, persistência após atualizar, recuperação por e-mail, proteção e retorno à rota solicitada.
 
 ---
 
