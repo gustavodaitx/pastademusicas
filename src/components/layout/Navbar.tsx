@@ -38,6 +38,7 @@ export const Navbar: React.FC = () => {
     { to: '/', label: 'Início', icon: Music },
     { to: '/biblioteca', label: 'Biblioteca', icon: Library },
     { to: '/playlists', label: 'Playlists', icon: ListMusic },
+    { to: '/repertorios', label: 'Repertórios', icon: Church },
     { to: '/importar', label: 'Importar', icon: Upload },
     { to: '/palco', label: 'Modo Palco', icon: Mic2, highlight: true },
     { to: '/modo-igreja', label: 'Igreja', icon: Church },

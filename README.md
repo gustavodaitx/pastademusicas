@@ -1,88 +1,55 @@
-# PDS — Pasta de Música 🎵
+# Pasta de Música
 
-> Aplicação web responsiva e PWA para organizar músicas cifradas, criar repertórios litúrgicos (Modo Igreja) e de apresentações (Modo Barzinho), visualizar acordes em Modo Palco com autoscroll, importar documentos locais (DOCX, PDF, TXT) e exportar repertórios.
+Aplicação web responsiva para organizar cifras privadas, playlists, repertórios e preferências de palco. A persistência usa Firebase Authentication e Cloud Firestore no plano Spark. O projeto não usa Cloud Functions, Cloud Scheduler, pagamentos ou catálogo público.
 
----
+## Funcionalidades conectadas
 
-## ⚡ Regra de Ouro: Custo Zero Obrigatório
-Este projeto foi concebido e estruturado para ter **custo zero permanente**.
-- **100% Gratuito e Open-Source**: Sem cobranças obrigatórias, sem ativação de cartões de crédito.
-- **Firebase Spark**: Authentication e Cloud Firestore operando dentro das cotas gratuitas mensais e diárias.
-- **Processamento no Navegador**: Extração de arquivos DOCX, PDFs textuais, TXT e transposição de acordes executados inteiramente client-side (sem servidores caros).
-- **Patrocínio Voluntário**: Doações via Pix estático (sem intermediários ou gateways de pagamento pagos).
-- Detalhes completos e limites de cotas documentados em [`docs/LIMITES_E_CUSTOS.md`](file:///c:/Users/Gustavo%20Daitx/Desktop/Ulbra/10Semestre/pastademusicas/docs/LIMITES_E_CUSTOS.md).
+- Cadastro, login, logout, recuperação de senha e proteção de rotas com Firebase Authentication.
+- Biblioteca privada com cadastro, consulta, edição e exclusão de músicas no Firestore.
+- Playlists e repertórios privados com inclusão, remoção e ordenação de músicas da biblioteca.
+- Preferências privadas de tema, tamanho da fonte e velocidade de autoscroll.
+- Preferências de tema disponíveis no `localStorage` para inicialização local; fonte e velocidade ficam em cache local por UID.
+- Seleção local de arquivos para a etapa futura de importação. Extração, pré-visualização e gravação ainda não estão implementadas.
 
----
+Os modos Igreja, Barzinho e Palco ainda não selecionam e carregam repertórios/músicas salvos como uma experiência completa. Eles não exibem dados fixos como conteúdo persistido. Consulte [Limitações](docs/INTEGRACAO_FIRESTORE.md#limites-e-cuidados).
 
-## 🚀 Funcionalidades Principais
+## Stack e scripts
 
-1. **Biblioteca e Pesquisa**: Cadastro e pesquisa inteligente de cifras por título, tom, artista, categoria, tags e momentos litúrgicos.
-2. **Importação Local Multi-formato**: Suporte a arquivos `.docx` (via Mammoth), `.pdf` textual (via PDF.js) e `.txt`, com pré-visualização e confirmação antes de salvar.
-3. **Playlists Manuais**: Criação, edição, reordenação acessível e persistência de repertórios.
-4. **Modo Igreja**: Sequência litúrgica obrigatória de 10 momentos (Entrada, Perdão, Glória, Salmo, Aclamação, Ofertório, Santo, Comunhão, Pós-comunhão e Final) com sugestões baseadas exclusivamente no catálogo existente (sem alucinação).
-5. **Modo Barzinho**: Geração de repertório assistido com filtros de estilo, quantidade (5 a 40), alternância de ritmos e preferência de tom.
-6. **Modo Palco**: Interface escurecida com contraste de alta legibilidade, rolagem automática suave com velocidade regulável e atalhos rápidos.
-7. **Exportação**: Geração de repertórios em PDF formatado, TXT, HTML e DOCX.
-8. **Integração Google Drive**: Importação assistida de arquivos via Google Picker oficial com escopo mínimo (`drive.file`).
-9. **Apoio Voluntário via Pix**: QR Code e código copia-e-cola estáticos do Pix sem intermediários.
+- React, TypeScript, Vite, Tailwind CSS e React Router.
+- Firebase JavaScript SDK modular.
+- Vitest, React Testing Library e Firebase Emulator Suite.
 
----
-
-## 🛠️ Stack Tecnológica
-
-- **Frontend**: React 18 / TypeScript / Vite
-- **Estilização**: Tailwind CSS / Lucide Icons
-- **Roteamento**: React Router v6
-- **Autenticação e Nuvem**: Firebase Authentication & Cloud Firestore (Plano Spark)
-- **Parsers Locais**: Mammoth.js (DOCX), PDF.js (PDF com camada de texto), FileReader nativo (TXT)
-- **Exportação Local**: jsPDF (PDF), docx (DOCX), Blobs nativos (HTML / TXT)
-- **Testes**: Vitest, React Testing Library
-
----
-
-## 📂 Estrutura de Documentação
-
-- [`docs/ESPECIFICACAO_TECNICA.md`](file:///c:/Users/Gustavo%20Daitx/Desktop/Ulbra/10Semestre/pastademusicas/docs/ESPECIFICACAO_TECNICA.md): Especificação completa e prompt mestre.
-- [`docs/DECISOES_TECNICAS.md`](file:///c:/Users/Gustavo%20Daitx/Desktop/Ulbra/10Semestre/pastademusicas/docs/DECISOES_TECNICAS.md): Diagnóstico, decisões arquiteturais e mitigação de riscos.
-- [`docs/LIMITES_E_CUSTOS.md`](file:///c:/Users/Gustavo%20Daitx/Desktop/Ulbra/10Semestre/pastademusicas/docs/LIMITES_E_CUSTOS.md): Inventário de cotas gratuitas e alternativas.
-- [`TASK.md`](file:///c:/Users/Gustavo%20Daitx/Desktop/Ulbra/10Semestre/pastademusicas/TASK.md): Rastreamento detalhado das etapas T00 a T15 e critérios de aceite.
-
----
-
-## 💻 Como Executar Localmente
-
-### Pré-requisitos
-- Node.js `v20+` ou `v22+`
-- npm `10+`
-- Git
-
-### Instalação (após implementação da fase T01)
 ```bash
-# Clone ou acesse o repositório
-git clone <url-do-repositorio>
-
-# Crie seu arquivo de variáveis de ambiente a partir do exemplo
-cp .env.example .env.local
-
-# Instale as dependências
 npm install
-
-# Inicie o servidor de desenvolvimento
 npm run dev
+npm run typecheck
+npm run lint
+npm test
+npm run build
 ```
 
-### Comandos de Testes e Validação
+## Configuração Firebase
+
+Crie um projeto Firebase no plano Spark e um aplicativo Web. Em **Authentication > Sign-in method**, habilite **E-mail/senha**. Crie o banco Cloud Firestore no projeto e escolha uma região. Copie `.env.example` para `.env.local` e preencha as variáveis `VITE_FIREBASE_*` com a configuração do aplicativo. Não coloque segredos de servidor nesse arquivo; as credenciais Web são configuração de cliente e `.env.local` não deve ser commitado.
+
+As regras estão em [`firestore.rules`](firestore.rules), mas não são publicadas automaticamente. Revise-as antes de qualquer publicação autorizada. O guia completo está em [Integração Firestore](docs/INTEGRACAO_FIRESTORE.md) e [Configuração local](docs/CONFIGURACAO_LOCAL.md).
+
+## Testes locais com Emulator Suite
+
+Instale Firebase CLI e Java 21 ou superior. O script abaixo usa apenas o emulador Firestore e um ID `demo-*`; não acessa dados reais nem serviços Firebase não emulados:
+
 ```bash
-npm run typecheck    # Verificação estrita de tipagem TypeScript
-npm run lint         # Verificação de padrões de código
-npm run test         # Execução dos testes unitários
-npm run build        # Geração do bundle de produção
+firebase emulators:exec --only firestore --project demo-pasta-de-musica-t03 "npm test"
 ```
 
-## Autenticação Firebase (T02)
+Os testes de regras ficam em `src/test/firestore-rules.test.ts`. O aplicativo web não se conecta automaticamente ao emulador; não use um `.env.local` de produção para experimentos de interface que gravem dados.
 
-A autenticação usa Firebase Authentication com e-mail e senha no plano Spark. Crie um projeto Firebase exclusivo para Pasta de Música, cadastre um aplicativo Web e habilite **Authentication > Sign-in method > E-mail/senha**. Em **Authentication > Settings > Authorized domains**, confira os domínios usados localmente e na hospedagem. Em **Configurações do projeto > Seus aplicativos**, copie a configuração do aplicativo Web.
+## Documentação
 
-Na raiz do projeto, copie `.env.example` para `.env.local` e preencha as seis variáveis `VITE_FIREBASE_*` com os valores desse projeto. O `.env.local` é ignorado pelo Git. Reinicie `npm run dev` após editar as variáveis. Sem configuração, a tela de login informa o que falta e não simula autenticação.
-
-As rotas Biblioteca, Playlists, Importar, Igreja, Barzinho, Palco, Patrocínio e Configurações exigem login. O dashboard em `/` e a tela `/login` permanecem públicos.
+- [Integração Firestore, regras e limitações](docs/INTEGRACAO_FIRESTORE.md)
+- [Modelo de dados](docs/MODELO_DE_DADOS.md)
+- [Diretrizes de segurança](docs/SEGURANCA.md)
+- [Arquitetura](docs/ARQUITETURA.md)
+- [Limites e custos](docs/LIMITES_E_CUSTOS.md)
+- [Configuração local](docs/CONFIGURACAO_LOCAL.md)
+- [Plano de tarefas](TASK.md)

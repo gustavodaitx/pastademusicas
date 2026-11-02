@@ -1,9 +1,63 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Settings, Sun, Moon, Monitor, HardDrive, Shield, Sparkles } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
+import { useAuth } from '../../hooks/useAuth';
+import { DEFAULT_USER_PREFERENCES, getUserPreferences, PreferencesRepositoryError, saveUserPreferences } from '../../services/preferencesRepository';
+import type { PreferencesInput } from '../../services/preferencesRepository';
+import type { UserPreferences } from '../../types/firestore';
+import type { Theme } from '../../types/theme';
+
+const FONT_SIZE_STORAGE_KEY = 'pasta_de_musica_font_size';
+const AUTOSCROLL_STORAGE_KEY = 'pasta_de_musica_scroll_speed';
+
+function themeFromFirestore(theme: UserPreferences['tema']): Theme {
+  if (theme === 'claro') return 'light';
+  if (theme === 'escuro') return 'dark';
+  return 'system';
+}
 
 export const SettingsPage: React.FC = () => {
   const { theme, setTheme } = useTheme();
+  const { user, loading: authLoading } = useAuth();
+  const [preferences, setPreferences] = useState<PreferencesInput>(DEFAULT_USER_PREFERENCES);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const cacheLocally = useCallback((next: PreferencesInput) => {
+    setTheme(themeFromFirestore(next.tema));
+    if (!user) return;
+    try {
+      localStorage.setItem(`${FONT_SIZE_STORAGE_KEY}:${user.uid}`, String(next.tamanhoFonte));
+      localStorage.setItem(`${AUTOSCROLL_STORAGE_KEY}:${user.uid}`, String(next.velocidadeAutoscroll));
+    } catch { /* Local storage is an offline cache only. */ }
+  }, [setTheme, user]);
+
+  const loadPreferences = useCallback(async () => {
+    if (authLoading) return;
+    if (!user) { setLoading(false); setError('Entre na sua conta para carregar suas preferências.'); return; }
+    setLoading(true); setError(null);
+    try {
+      const saved = await getUserPreferences();
+      const next = { tema: saved.tema, tamanhoFonte: saved.tamanhoFonte, velocidadeAutoscroll: saved.velocidadeAutoscroll };
+      setPreferences(next); cacheLocally(next);
+    } catch (loadError) {
+      setError(loadError instanceof PreferencesRepositoryError ? loadError.message : 'Não foi possível carregar as preferências. Tente novamente.');
+    } finally { setLoading(false); }
+  }, [authLoading, user, cacheLocally]);
+
+  useEffect(() => { void loadPreferences(); }, [loadPreferences]);
+
+  const savePreferences = async () => {
+    setSaving(true); setError(null); setNotice(null); cacheLocally(preferences);
+    try {
+      await saveUserPreferences(preferences);
+      setNotice('Preferências salvas na sua conta.');
+    } catch (saveError) {
+      setError(saveError instanceof PreferencesRepositoryError ? saveError.message : 'Não foi possível salvar as preferências. Tente novamente.');
+    } finally { setSaving(false); }
+  };
 
   return (
     <div className="flex-1 py-8 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full space-y-6">
@@ -19,8 +73,12 @@ export const SettingsPage: React.FC = () => {
         </p>
       </div>
 
+      {error && <div role="alert" className="p-3 rounded-xl border border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200 text-sm">{error}<button type="button" onClick={() => void loadPreferences()} className="ml-2 font-semibold underline">Tentar novamente</button></div>}
+      {notice && <div role="status" className="p-3 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 text-sm">{notice}</div>}
+      {loading && <p role="status" aria-busy="true" className="py-5 text-center text-sm text-slate-500">Carregando preferências…</p>}
+
       {/* Theme Card */}
-      <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+      <div aria-busy={loading} className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <div>
           <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">
             Aparência e Tema
@@ -34,7 +92,7 @@ export const SettingsPage: React.FC = () => {
           {/* Light */}
           <button
             type="button"
-            onClick={() => setTheme('light')}
+            onClick={() => { setTheme('light'); setPreferences((current) => ({ ...current, tema: 'claro' })); }}
             className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${
               theme === 'light'
                 ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 shadow-sm'
@@ -53,7 +111,7 @@ export const SettingsPage: React.FC = () => {
           {/* Dark */}
           <button
             type="button"
-            onClick={() => setTheme('dark')}
+            onClick={() => { setTheme('dark'); setPreferences((current) => ({ ...current, tema: 'escuro' })); }}
             className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${
               theme === 'dark'
                 ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 shadow-sm'
@@ -72,7 +130,7 @@ export const SettingsPage: React.FC = () => {
           {/* System */}
           <button
             type="button"
-            onClick={() => setTheme('system')}
+            onClick={() => { setTheme('system'); setPreferences((current) => ({ ...current, tema: 'sistema' })); }}
             className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${
               theme === 'system'
                 ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 shadow-sm'
@@ -88,6 +146,11 @@ export const SettingsPage: React.FC = () => {
             </div>
           </button>
         </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 border-t border-slate-100 dark:border-slate-800 pt-4">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Tamanho da fonte no Modo Palco: <span className="font-bold">{preferences.tamanhoFonte}px</span><input aria-label="Tamanho da fonte no Modo Palco" type="range" min="10" max="72" value={preferences.tamanhoFonte} disabled={loading || saving} onChange={(event) => setPreferences((current) => ({ ...current, tamanhoFonte: Number(event.target.value) }))} className="mt-2 w-full accent-brand-600" /></label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Velocidade do autoscroll: <span className="font-bold">{preferences.velocidadeAutoscroll}/10</span><input aria-label="Velocidade do autoscroll" type="range" min="1" max="10" value={preferences.velocidadeAutoscroll} disabled={loading || saving} onChange={(event) => setPreferences((current) => ({ ...current, velocidadeAutoscroll: Number(event.target.value) }))} className="mt-2 w-full accent-brand-600" /></label>
+        </div>
+        <div className="flex justify-end"><button type="button" disabled={loading || saving || !user} onClick={() => void savePreferences()} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar preferências'}</button></div>
       </div>
 
       {/* Google Drive Status (T12 Preparation) */}

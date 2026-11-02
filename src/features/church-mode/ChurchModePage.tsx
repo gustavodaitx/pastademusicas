@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Church, CheckCircle2, AlertTriangle, Save, Music } from 'lucide-react';
 
 export const LITURGICAL_MOMENTS = [
@@ -15,21 +16,11 @@ export const LITURGICAL_MOMENTS = [
 ] as const;
 
 export const ChurchModePage: React.FC = () => {
-  const [celebrationName, setCelebrationName] = useState('Missa Solene do Domingo');
+  const [celebrationName, setCelebrationName] = useState('');
   
-  // Mock initial slots
-  const [slots] = useState<{ [pos: number]: { titulo: string; tom: string } | null }>({
-    1: { titulo: 'Como Zaqueu (Entra na Minha Casa)', tom: 'G' },
-    2: null,
-    3: null,
-    4: null,
-    5: { titulo: 'Aleluia, A Minha Alma Abrirei', tom: 'D' },
-    6: { titulo: 'Eis que Venho, Senhor', tom: 'E' },
-    7: null,
-    8: null,
-    9: null,
-    10: null,
-  });
+  const [slots] = useState<{ [pos: number]: { titulo: string; tom: string } | null }>(() =>
+    Object.fromEntries(LITURGICAL_MOMENTS.map(({ id }) => [id, null])),
+  );
 
   return (
     <div className="flex-1 py-8 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full space-y-6">
@@ -46,13 +37,10 @@ export const ChurchModePage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-sm transition-colors"
-        >
+        <Link to="/repertorios" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-sm transition-colors">
           <Save className="w-4 h-4" />
-          <span>Salvar Playlist Litúrgica</span>
-        </button>
+          <span>Gerenciar Repertórios</span>
+        </Link>
       </div>
 
       {/* Celebration Name Input */}
@@ -64,6 +52,7 @@ export const ChurchModePage: React.FC = () => {
           id="celebration-name"
           type="text"
           value={celebrationName}
+          placeholder="Nome da celebração"
           onChange={(e) => setCelebrationName(e.target.value)}
           className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
