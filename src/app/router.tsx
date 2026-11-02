@@ -4,6 +4,7 @@ import { AppLayout } from '../components/layout/AppLayout';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { LibraryPage } from '../features/library/LibraryPage';
 import { PlaylistsPage } from '../features/playlists/PlaylistsPage';
+import { RepertoiresPage } from '../features/repertoires/RepertoiresPage';
 import { ImportMusicPage } from '../features/import-music/ImportMusicPage';
 import { ChurchModePage } from '../features/church-mode/ChurchModePage';
 import { BarModePage } from '../features/bar-mode/BarModePage';
@@ -32,6 +33,10 @@ export const router = createBrowserRouter([
       {
         path: 'playlists',
         element: protect(<PlaylistsPage />),
+      },
+      {
+        path: 'repertorios',
+        element: protect(<RepertoiresPage />),
       },
       {
         path: 'importar',

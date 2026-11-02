@@ -1,7 +1,9 @@
 /// <reference types="vite/client" />
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 import type { Auth } from 'firebase/auth';
+import type { Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -16,8 +18,11 @@ export const isFirebaseConfigured = Object.values(firebaseConfig).every(
   (value) => typeof value === 'string' && value.trim().length > 0,
 );
 
-export const auth: Auth | null = isFirebaseConfigured
-  ? getAuth(getApps().some((app) => app.name === 'pasta-de-musica')
-      ? getApp('pasta-de-musica')
-      : initializeApp(firebaseConfig, 'pasta-de-musica'))
+const firebaseApp = isFirebaseConfigured
+  ? (getApps().some((app) => app.name === 'pasta-de-musica')
+    ? getApp('pasta-de-musica')
+    : initializeApp(firebaseConfig, 'pasta-de-musica'))
   : null;
+
+export const auth: Auth | null = firebaseApp ? getAuth(firebaseApp) : null;
+export const db: Firestore | null = firebaseApp ? getFirestore(firebaseApp) : null;

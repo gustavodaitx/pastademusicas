@@ -1,0 +1,179 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function hasOnlyFields(data, fields) {
+      return data.keys().hasOnly(fields);
+    }
+
+    function validProfile(data) {
+      return hasOnlyFields(data, ['nome', 'email', 'perfil', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['nome', 'email', 'perfil', 'createdAt', 'updatedAt'])
+        && data.nome is string && data.nome.size() > 0 && data.nome.size() <= 100
+        && data.email is string && data.email.size() <= 254
+        && data.perfil == 'FREE'
+        && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function validMusic(data) {
+      return hasOnlyFields(data, ['titulo', 'artista', 'tomOriginal', 'conteudoCifrado', 'categorias', 'tags', 'momentosLiturgicos', 'estilo', 'origemTipo', 'driveFileId', 'arquivoNome', 'licencaOuPermissao', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['titulo', 'artista', 'tomOriginal', 'conteudoCifrado', 'categorias', 'tags', 'momentosLiturgicos', 'estilo', 'origemTipo', 'driveFileId', 'arquivoNome', 'licencaOuPermissao', 'createdAt', 'updatedAt'])
+        && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 200
+        && (data.artista == null || (data.artista is string && data.artista.size() <= 200))
+        && (data.tomOriginal == null || (data.tomOriginal is string && data.tomOriginal.size() <= 12))
+        && data.conteudoCifrado is string && data.conteudoCifrado.size() <= 800000
+        && data.categorias is list && data.categorias.size() <= 30
+        && data.tags is list && data.tags.size() <= 50
+        && data.momentosLiturgicos is list && data.momentosLiturgicos.size() <= 20
+        && data.estilo is list && data.estilo.size() <= 30
+        && data.origemTipo in ['catalogo', 'upload_local', 'google_drive', 'manual']
+        && (data.driveFileId == null || (data.driveFileId is string && data.driveFileId.size() <= 500))
+        && (data.arquivoNome == null || (data.arquivoNome is string && data.arquivoNome.size() <= 255))
+        && (data.licencaOuPermissao == null || (data.licencaOuPermissao is string && data.licencaOuPermissao.size() <= 2000))
+        && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function validPlaylist(data) {
+      return hasOnlyFields(data, ['nome', 'tipo', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['nome', 'tipo', 'createdAt', 'updatedAt'])
+        && data.nome is string && data.nome.size() > 0 && data.nome.size() <= 120
+        && data.tipo in ['manual', 'igreja', 'barzinho']
+        && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function validPlaylistItem(data) {
+      return hasOnlyFields(data, ['musicaId', 'posicao', 'momento', 'tomPersonalizado'])
+        && data.keys().hasAll(['musicaId', 'posicao', 'momento', 'tomPersonalizado'])
+        && data.musicaId is string && data.musicaId.size() > 0 && data.musicaId.size() <= 1500
+        && data.posicao is int && data.posicao >= 1
+        && (data.momento == null || (data.momento is string && data.momento.size() <= 100))
+        && (data.tomPersonalizado == null || (data.tomPersonalizado is string && data.tomPersonalizado.size() <= 12));
+    }
+
+    function validRepertoire(data) {
+      return hasOnlyFields(data, ['nome', 'tipo', 'parametrosGeracao', 'createdAt', 'updatedAt'])
+        && data.keys().hasAll(['nome', 'tipo', 'parametrosGeracao', 'createdAt', 'updatedAt'])
+        && data.nome is string && data.nome.size() > 0 && data.nome.size() <= 120
+        && data.tipo in ['igreja', 'barzinho']
+        && (data.parametrosGeracao == null || (data.parametrosGeracao is map && data.parametrosGeracao.size() <= 10))
+        && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function validRepertoireItem(data) {
+      return validPlaylistItem(data);
+    }
+
+    function validPreferences(data) {
+      return hasOnlyFields(data, ['tema', 'tamanhoFonte', 'velocidadeAutoscroll', 'updatedAt'])
+        && data.keys().hasAll(['tema', 'tamanhoFonte', 'velocidadeAutoscroll', 'updatedAt'])
+        && data.tema in ['claro', 'escuro', 'sistema']
+        && data.tamanhoFonte is number && data.tamanhoFonte >= 10 && data.tamanhoFonte <= 72
+        && data.velocidadeAutoscroll is number && data.velocidadeAutoscroll >= 1 && data.velocidadeAutoscroll <= 10
+        && data.updatedAt is timestamp;
+    }
+
+    match /usuarios/{uid} {
+      allow get: if isOwner(uid);
+      allow list: if false;
+      allow create: if isOwner(uid)
+        && validProfile(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isOwner(uid)
+        && validProfile(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.perfil == resource.data.perfil
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+
+      match /musicas/{musicaId} {
+        allow get, list: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && validMusic(request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if isOwner(uid)
+          && validMusic(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if isOwner(uid);
+      }
+
+      match /playlists/{playlistId} {
+        allow get, list: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && validPlaylist(request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if isOwner(uid)
+          && validPlaylist(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if isOwner(uid);
+
+        match /itens/{itemId} {
+          allow get, list: if isOwner(uid)
+            && exists(/databases/$(database)/documents/usuarios/$(uid)/playlists/$(playlistId));
+          allow create: if isOwner(uid)
+            && exists(/databases/$(database)/documents/usuarios/$(uid)/playlists/$(playlistId))
+            && validPlaylistItem(request.resource.data)
+            && request.resource.data.musicaId == itemId
+            && exists(/databases/$(database)/documents/usuarios/$(uid)/musicas/$(request.resource.data.musicaId));
+          allow update: if isOwner(uid)
+            && exists(/databases/$(database)/documents/usuarios/$(uid)/playlists/$(playlistId))
+            && validPlaylistItem(request.resource.data)
+            && request.resource.data.musicaId == itemId
+            && resource.data.musicaId == itemId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['posicao', 'momento', 'tomPersonalizado']);
+          allow delete: if isOwner(uid);
+        }
+      }
+
+      match /repertorios/{repertorioId} {
+        allow get, list: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && validRepertoire(request.resource.data)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if isOwner(uid)
+          && validRepertoire(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if isOwner(uid);
+
+        match /itens/{itemId} {
+          allow get, list: if isOwner(uid)
+            && exists(/databases/$(database)/documents/usuarios/$(uid)/repertorios/$(repertorioId));
+          allow create: if isOwner(uid)
+            && exists(/databases/$(database)/documents/usuarios/$(uid)/repertorios/$(repertorioId))
+            && validRepertoireItem(request.resource.data)
+            && request.resource.data.musicaId == itemId
+            && exists(/databases/$(database)/documents/usuarios/$(uid)/musicas/$(request.resource.data.musicaId));
+          allow update: if isOwner(uid)
+            && exists(/databases/$(database)/documents/usuarios/$(uid)/repertorios/$(repertorioId))
+            && validRepertoireItem(request.resource.data)
+            && request.resource.data.musicaId == itemId
+            && resource.data.musicaId == itemId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['posicao', 'momento', 'tomPersonalizado']);
+          allow delete: if isOwner(uid);
+        }
+      }
+
+      match /configuracoes/preferencias {
+        allow get: if isOwner(uid);
+        allow list: if false;
+        allow create, update: if isOwner(uid)
+          && validPreferences(request.resource.data)
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if isOwner(uid);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
