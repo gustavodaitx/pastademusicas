@@ -27,8 +27,10 @@ export class MusicRepositoryError extends Error {
 const limits = {
   titulo: 200,
   artista: 200,
+  compositor: 200,
   tomOriginal: 12,
   conteudoCifrado: 800_000,
+  observacoes: 5_000,
   categorias: 30,
   tags: 50,
   momentosLiturgicos: 20,
@@ -94,8 +96,10 @@ export function validateMusicInput(input: MusicInput): MusicInput {
   return {
     titulo: requiredText(input.titulo, 'O título', limits.titulo),
     artista: optionalText(input.artista, 'O artista', limits.artista),
+    compositor: optionalText(input.compositor, 'O compositor', limits.compositor),
     tomOriginal: optionalText(input.tomOriginal, 'O tom', limits.tomOriginal),
     conteudoCifrado: chordContent(input.conteudoCifrado),
+    observacoes: optionalText(input.observacoes, 'As observações', limits.observacoes),
     categorias: stringList(input.categorias, 'Categorias', limits.categorias),
     tags: stringList(input.tags, 'Tags', limits.tags),
     momentosLiturgicos: stringList(input.momentosLiturgicos, 'Momentos litúrgicos', limits.momentosLiturgicos),

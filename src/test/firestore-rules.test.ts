@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { Timestamp, collection, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { Timestamp, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createMusicRepository, MusicRepositoryError } from '../services/musicRepository';
@@ -192,6 +192,34 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
     await assertFails(setDoc(doc(db, 'usuarios/user-a/musicas/forged-time'), music));
   });
 
+  it('accepts legacy and optional music fields while rejecting invalid optional values', async () => {
+    const owner = testEnvironment.authenticatedContext('music-schema-owner').firestore();
+    const legacyRef = doc(owner, 'usuarios/music-schema-owner/musicas/legacy');
+    await assertSucceeds(setDoc(legacyRef, withCurrentTimestamps(music)));
+    await assertSucceeds(getDoc(legacyRef));
+
+    const optionalRef = doc(owner, 'usuarios/music-schema-owner/musicas/optional');
+    await assertSucceeds(setDoc(optionalRef, withCurrentTimestamps({
+      ...music,
+      compositor: '  Compositora Áurea  ',
+      observacoes: 'Introdução\nAndamento moderado',
+    })));
+    await assertSucceeds(setDoc(doc(owner, 'usuarios/music-schema-owner/musicas/null-fields'), withCurrentTimestamps({
+      ...music,
+      compositor: null,
+      observacoes: null,
+    })));
+    await assertFails(setDoc(doc(owner, 'usuarios/music-schema-owner/musicas/wrong-type'), withCurrentTimestamps({ ...music, compositor: 42 })));
+    await assertFails(setDoc(doc(owner, 'usuarios/music-schema-owner/musicas/long-composer'), withCurrentTimestamps({ ...music, compositor: 'c'.repeat(201) })));
+    await assertFails(setDoc(doc(owner, 'usuarios/music-schema-owner/musicas/long-notes'), withCurrentTimestamps({ ...music, observacoes: 'o'.repeat(5001) })));
+    await assertFails(setDoc(doc(owner, 'usuarios/music-schema-owner/musicas/extra'), withCurrentTimestamps({ ...music, unexpected: true })));
+
+    const other = testEnvironment.authenticatedContext('music-schema-other').firestore();
+    await assertFails(getDoc(doc(other, 'usuarios/music-schema-owner/musicas/optional')));
+    await assertFails(updateDoc(doc(other, 'usuarios/music-schema-owner/musicas/optional'), { observacoes: 'alterada', updatedAt: serverTimestamp() }));
+    await assertFails(deleteDoc(doc(other, 'usuarios/music-schema-owner/musicas/optional')));
+  });
+
   it('denies access to unlisted top-level paths and cross-user list items by default', async () => {
     const owner = testEnvironment.authenticatedContext('default-deny-owner').firestore();
     const other = testEnvironment.authenticatedContext('default-deny-other').firestore();
@@ -289,6 +317,36 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
     expect(await repository.listMusics()).toEqual([]);
   });
 
+  it('music repository trims optional metadata, preserves line breaks and edits legacy documents', async () => {
+    const repository = repositoryFor('music-compatibility-owner');
+    const id = await repository.createMusic({
+      ...musicInput,
+      compositor: '  João Ávila  ',
+      observacoes: '  Introdução\n  Andamento  ',
+    });
+    const saved = await repository.getMusicById(id);
+    expect(saved?.compositor).toBe('João Ávila');
+    expect(saved?.observacoes).toBe('Introdução\n  Andamento');
+
+    const legacyId = 'legacy-song';
+    await assertSucceeds(setDoc(
+      doc(testEnvironment.authenticatedContext('music-compatibility-owner').firestore(), `usuarios/music-compatibility-owner/musicas/${legacyId}`),
+      withCurrentTimestamps(music),
+    ));
+    const legacy = await repository.getMusicById(legacyId);
+    expect(legacy).toMatchObject({ titulo: music.titulo, conteudoCifrado: music.conteudoCifrado });
+    expect(legacy?.compositor).toBeUndefined();
+    await repository.updateMusic(legacyId, { ...musicInput, titulo: 'Documento antigo revisado' });
+    expect(await repository.getMusicById(legacyId)).toMatchObject({
+      titulo: 'Documento antigo revisado',
+      artista: music.artista,
+      conteudoCifrado: music.conteudoCifrado,
+      licencaOuPermissao: music.licencaOuPermissao,
+      compositor: null,
+      observacoes: null,
+    });
+  });
+
   it('music repository rejects unauthenticated access before contacting Firestore', async () => {
     const repository = repositoryFor(null);
     await expect(repository.listMusics()).rejects.toMatchObject({ code: 'auth/unauthenticated' });
@@ -312,6 +370,10 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
       .rejects.toMatchObject({ code: 'validation/required' });
     await expect(repository.createMusic({ ...musicInput, tags: Array.from({ length: 51 }, (_, index) => `tag-${index}`) }))
       .rejects.toMatchObject({ code: 'validation/too-many-items' });
+    await expect(repository.createMusic({ ...musicInput, compositor: 'c'.repeat(201) }))
+      .rejects.toMatchObject({ code: 'validation/too-long' });
+    await expect(repository.createMusic({ ...musicInput, observacoes: 'o'.repeat(5001) }))
+      .rejects.toMatchObject({ code: 'validation/too-long' });
     await expect(repository.createMusic({ ...musicInput, conteudoCifrado: '🎵'.repeat(250_000) }))
       .rejects.toMatchObject({ code: 'validation/too-long' });
     await expect(repository.getMusicById('invalid/id'))

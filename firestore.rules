@@ -19,12 +19,14 @@ service cloud.firestore {
     }
 
     function validMusic(data) {
-      return hasOnlyFields(data, ['titulo', 'artista', 'tomOriginal', 'conteudoCifrado', 'categorias', 'tags', 'momentosLiturgicos', 'estilo', 'origemTipo', 'driveFileId', 'arquivoNome', 'licencaOuPermissao', 'createdAt', 'updatedAt'])
+      return hasOnlyFields(data, ['titulo', 'artista', 'compositor', 'tomOriginal', 'conteudoCifrado', 'observacoes', 'categorias', 'tags', 'momentosLiturgicos', 'estilo', 'origemTipo', 'driveFileId', 'arquivoNome', 'licencaOuPermissao', 'createdAt', 'updatedAt'])
         && data.keys().hasAll(['titulo', 'artista', 'tomOriginal', 'conteudoCifrado', 'categorias', 'tags', 'momentosLiturgicos', 'estilo', 'origemTipo', 'driveFileId', 'arquivoNome', 'licencaOuPermissao', 'createdAt', 'updatedAt'])
         && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 200
         && (data.artista == null || (data.artista is string && data.artista.size() <= 200))
+        && (!('compositor' in data) || data.compositor == null || (data.compositor is string && data.compositor.size() <= 200))
         && (data.tomOriginal == null || (data.tomOriginal is string && data.tomOriginal.size() <= 12))
         && data.conteudoCifrado is string && data.conteudoCifrado.size() <= 800000
+        && (!('observacoes' in data) || data.observacoes == null || (data.observacoes is string && data.observacoes.size() <= 5000))
         && data.categorias is list && data.categorias.size() <= 30
         && data.tags is list && data.tags.size() <= 50
         && data.momentosLiturgicos is list && data.momentosLiturgicos.size() <= 20

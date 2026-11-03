@@ -12,12 +12,15 @@ import {
   updateMusic,
 } from '../../services/musicRepository';
 import type { MusicInput, MusicRecord } from '../../services/musicRepository';
+import { createMusicSearchIndex, normalizeMusicSearchText } from './musicSearch';
 
 type MusicForm = {
   titulo: string;
   artista: string;
+  compositor: string;
   tomOriginal: string;
   conteudoCifrado: string;
+  observacoes: string;
   categorias: string;
   tags: string;
 };
@@ -25,8 +28,10 @@ type MusicForm = {
 const emptyForm: MusicForm = {
   titulo: '',
   artista: '',
+  compositor: '',
   tomOriginal: '',
   conteudoCifrado: '',
+  observacoes: '',
   categorias: '',
   tags: '',
 };
@@ -37,8 +42,10 @@ function formFromMusic(music: MusicRecord): MusicForm {
   return {
     titulo: music.titulo,
     artista: music.artista ?? '',
+    compositor: music.compositor ?? '',
     tomOriginal: music.tomOriginal ?? '',
     conteudoCifrado: music.conteudoCifrado,
+    observacoes: music.observacoes ?? '',
     categorias: music.categorias.join(', '),
     tags: music.tags.join(', '),
   };
@@ -48,8 +55,10 @@ function inputFromForm(form: MusicForm, existing?: MusicRecord): MusicInput {
   return {
     titulo: form.titulo,
     artista: form.artista || null,
+    compositor: form.compositor.trim() || null,
     tomOriginal: form.tomOriginal || null,
     conteudoCifrado: form.conteudoCifrado,
+    observacoes: form.observacoes.trim() || null,
     categorias: splitValues(form.categorias),
     tags: splitValues(form.tags),
     momentosLiturgicos: existing?.momentosLiturgicos ?? [],
@@ -117,16 +126,16 @@ export const LibraryPage = () => {
     [musics],
   );
 
+  const musicSearchIndex = useMemo(() => createMusicSearchIndex(musics), [musics]);
   const filteredMusics = useMemo(() => {
-    const term = searchTerm.trim().toLocaleLowerCase();
-    return musics.filter((music) => {
-      const matchesSearch = !term || [music.titulo, music.artista ?? '', ...music.tags]
-        .some((value) => value.toLocaleLowerCase().includes(term));
+    const term = normalizeMusicSearchText(searchTerm);
+    return musicSearchIndex.filter(({ music, normalizedFields }) => {
+      const matchesSearch = !term || normalizedFields.some((field) => field.includes(term));
       const matchesCategory = selectedCategory === 'Todas' || music.categorias.includes(selectedCategory);
       const matchesKey = selectedKey === 'Todos' || music.tomOriginal === selectedKey;
       return matchesSearch && matchesCategory && matchesKey;
-    });
-  }, [musics, searchTerm, selectedCategory, selectedKey]);
+    }).map(({ music }) => music);
+  }, [musicSearchIndex, searchTerm, selectedCategory, selectedKey]);
 
   const openCreate = () => {
     setEditingMusic(null);
@@ -231,7 +240,7 @@ export const LibraryPage = () => {
         <div className="flex flex-col md:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input type="search" aria-label="Pesquisar músicas" placeholder="Pesquisar por título, artista ou tag..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            <input type="search" aria-label="Pesquisar músicas" placeholder="Pesquisar título, artista, tag, letra ou cifra..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400 shrink-0 hidden sm:inline" />
@@ -290,10 +299,12 @@ export const LibraryPage = () => {
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Título <span className="text-rose-500">*</span><input required maxLength={200} value={form.titulo} onChange={(event) => setForm({ ...form, titulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" /></label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Artista<input maxLength={200} value={form.artista} onChange={(event) => setForm({ ...form, artista: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" /></label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Compositor<input maxLength={200} value={form.compositor} onChange={(event) => setForm({ ...form, compositor: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" /></label>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Tom original<input maxLength={12} value={form.tomOriginal} onChange={(event) => setForm({ ...form, tomOriginal: event.target.value })} placeholder="Ex.: C, F#m, Bb" className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" /></label>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Categorias <span className="text-xs font-normal text-slate-500">separadas por vírgula</span><input maxLength={1000} value={form.categorias} onChange={(event) => setForm({ ...form, categorias: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" /></label>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Tags <span className="text-xs font-normal text-slate-500">separadas por vírgula</span><input maxLength={2000} value={form.tags} onChange={(event) => setForm({ ...form, tags: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" /></label>
             </div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Observações <span className="text-xs font-normal text-slate-500">opcional, até 5.000 caracteres</span><textarea maxLength={5000} rows={4} value={form.observacoes} onChange={(event) => setForm({ ...form, observacoes: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" /></label>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Conteúdo/cifra <span className="text-rose-500">*</span><textarea required maxLength={800000} rows={12} value={form.conteudoCifrado} onChange={(event) => setForm({ ...form, conteudoCifrado: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-mono" /></label>
             <div className="flex justify-end gap-2 pt-2"><button type="button" disabled={saving} onClick={() => { setEditingMusic(null); setForm(emptyForm); setFormOpen(false); setError(null); }} className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Cancelar</button><button type="submit" disabled={saving} className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-sm font-semibold text-white">{saving ? 'Salvando…' : 'Salvar música'}</button></div>
           </form>
@@ -302,8 +313,9 @@ export const LibraryPage = () => {
 
       {viewingMusic && <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onMouseDown={(event) => { if (event.target === event.currentTarget) setViewingMusic(null); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="music-detail-title" className="my-8 w-full max-w-3xl rounded-2xl bg-white dark:bg-slate-900 p-5 sm:p-7 shadow-2xl">
-          <div className="flex items-start justify-between gap-4"><div><h2 id="music-detail-title" className="text-xl font-bold text-slate-900 dark:text-slate-100">{viewingMusic.titulo}</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{viewingMusic.artista || 'Artista não informado'}{viewingMusic.tomOriginal ? ` · Tom ${viewingMusic.tomOriginal}` : ''}</p></div><button type="button" onClick={() => setViewingMusic(null)} aria-label="Fechar cifra" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-5 h-5" /></button></div>
-          <pre className="mt-5 max-h-[65vh] overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 dark:bg-slate-950 p-4 text-sm font-mono leading-relaxed text-slate-800 dark:text-slate-100">{viewingMusic.conteudoCifrado}</pre>
+          <div className="flex items-start justify-between gap-4"><div className="min-w-0"><h2 id="music-detail-title" className="text-xl font-bold text-slate-900 dark:text-slate-100">{viewingMusic.titulo}</h2><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-400">{viewingMusic.artista && <span>Intérprete: {viewingMusic.artista}</span>}{viewingMusic.compositor && <span>Compositor: {viewingMusic.compositor}</span>}{viewingMusic.tomOriginal && <span>Tom: {viewingMusic.tomOriginal}</span>}</div>{(viewingMusic.categorias.length > 0 || viewingMusic.tags.length > 0) && <div className="mt-3 flex flex-wrap gap-1.5">{viewingMusic.categorias.map((category) => <span key={category} className="rounded-md bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-300">{category}</span>)}{viewingMusic.tags.map((tag) => <span key={tag} className="rounded-md bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 text-xs text-indigo-600 dark:text-indigo-400">{tag}</span>)}</div>}</div><button type="button" onClick={() => setViewingMusic(null)} aria-label="Fechar cifra" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-5 h-5" /></button></div>
+          <pre className="mt-5 max-h-[65vh] overflow-auto whitespace-pre rounded-xl bg-slate-50 dark:bg-slate-950 p-4 text-sm font-mono leading-relaxed text-slate-800 dark:text-slate-100">{viewingMusic.conteudoCifrado}</pre>
+          {viewingMusic.observacoes?.trim() && <section className="mt-4 rounded-xl border border-slate-200 dark:border-slate-800 p-4"><h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Observações</h3><p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-600 dark:text-slate-300">{viewingMusic.observacoes}</p></section>}
           <div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => openEdit(viewingMusic)} className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-sm font-semibold">Editar</button><button type="button" onClick={() => setViewingMusic(null)} className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-sm font-semibold text-white">Fechar</button></div>
         </section>
       </div>}
