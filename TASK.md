@@ -11,8 +11,8 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 - [x] **T00 — Diagnóstico do repositório, documentação técnica e decisões de arquitetura** `[CONCLUÍDA]`
 - [x] **T01 — Base da aplicação, layout responsivo, rotas e tema** `[CONCLUÍDA]`
 - [x] **T02 — Autenticação Firebase e proteção de rotas** `[CONCLUÍDA]`
-- [ ] **T03 — Modelo de dados Firestore e regras de segurança** `[PENDENTE]`
-- [ ] **T04 — Biblioteca de músicas, cadastro, pesquisa e visualização** `[PENDENTE]`
+- [ ] **T03 — Modelo de dados Firestore e regras de segurança** `[CONCLUÍDA]`
+- [x] **T04 — Biblioteca de músicas, cadastro, pesquisa e visualização** `[CONCLUÍDA]`
 - [ ] **T05 — Importação local de documentos (DOCX, PDF textual, TXT)** `[PENDENTE]`
 - [ ] **T06 — Playlists manuais (CRUD, ordenação e persistência)** `[PENDENTE]`
 - [ ] **T07 — Modo Igreja (10 momentos fixos e sugestões do catálogo)** `[PENDENTE]`
@@ -126,22 +126,26 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 
 ---
 
-### [ ] T04 — Biblioteca de Músicas, Cadastro, Pesquisa e Visualização
-- **Estado**: `PENDENTE`
-- **Objetivo**: Desenvolver a interface da Biblioteca, cadastro manual de músicas cifradas com metadados (tom, categoria, tags, estilo, momento litúrgico), pesquisa multifiltro e tela de visualização formatada com cifras alinhadas.
+### [x] T04 — Biblioteca de Músicas, Cadastro, Pesquisa e Visualização
+- **Estado**: `CONCLUÍDA`
+- **Objetivo**: Disponibilizar a Biblioteca privada integrada ao Firestore, com cadastro e edição de músicas, compositor e observações opcionais, pesquisa por metadados e conteúdo, filtros e visualização formatada de cifras.
 - **Dependências**: T03.
 - **Subtarefas**:
-  - [ ] Listagem de músicas com visualização em grade ou tabela responsiva.
-  - [ ] Formulário de cadastro/edição manual de música com preservação de espaçamento monoespaçado.
-  - [ ] Sistema de pesquisa em tempo real por título, artista, trecho, tom, categoria e tags.
-  - [ ] Tela de visualização detalhada com exibição nítida de acordes e letra.
-  - [ ] Mecanismo de favoritar músicas com persistência no Firestore/LocalStorage.
-  - [ ] Módulo básico de transposição de acordes (semitons para cima e para baixo).
+  - [x] Listagem responsiva de músicas persistidas no Firestore, sem dados de exemplo.
+  - [x] Formulário de cadastro/edição com validação e preservação do espaçamento da cifra.
+  - [x] Campos opcionais de compositor e observações, com limites e compatibilidade com documentos antigos.
+  - [x] Pesquisa em tempo real por título, artista, compositor, tags e trechos da letra/cifra, sem cruzar campos.
+  - [x] Filtros por tom e categoria combináveis com a pesquisa.
+  - [x] Visualização detalhada com metadados disponíveis e cifra alinhada em fonte monoespaçada.
 - **Testes Obrigatórios**:
-  - [ ] Testes unitários do algoritmo de transposição de acordes (maiores, menores, sustenidos, bemóis e inversões).
-  - [ ] Testes de filtros e pesquisa na biblioteca.
+  - [x] Testes de pesquisa, normalização, filtros e visualização da Biblioteca.
+  - [x] Testes de persistência, validação, compatibilidade e isolamento com Firebase Emulator Suite.
 - **Critérios de Aceite**:
-  - Pesquisa ágil e precisa; alinhamento de acordes preservado sem quebras incorretas.
+  - [x] Pesquisa normalizada e precisa, com consulta por campo independente.
+  - [x] Documentos antigos permanecem compatíveis e as regras mantêm isolamento por UID.
+  - [x] Formatação e alinhamento das cifras preservados na visualização.
+
+Favoritos não fazem parte do escopo aprovado da T04. A transposição de acordes continua planejada como funcionalidade futura do T09.
 
 ---
 

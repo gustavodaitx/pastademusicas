@@ -83,7 +83,63 @@ describe('LibraryPage', () => {
 
     const detailDialog = await screen.findByRole('dialog', { name: 'Canção persistida' });
     expect(detailDialog.querySelector('pre')?.textContent).toBe('G\nLetra e cifra salvas');
+    expect(detailDialog).not.toHaveTextContent('Compositor:');
+    expect(detailDialog).not.toHaveTextContent('Observações');
     expect(mocks.getMusicById).toHaveBeenCalledWith('song-1');
+  });
+
+  it('shows optional composer and notes, while omitting them for legacy songs', async () => {
+    const songWithNotes = { ...music, id: 'song-with-notes', compositor: 'Compositora Áurea', observacoes: 'Introdução\nAndamento moderado' };
+    mocks.listMusics.mockResolvedValue([songWithNotes, music]);
+    mocks.getMusicById.mockResolvedValue(songWithNotes);
+    renderPage();
+
+    await screen.findAllByText('Canção persistida');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver Cifra' })[0]);
+    const dialog = await screen.findByRole('dialog', { name: 'Canção persistida' });
+    expect(dialog).toHaveTextContent('Compositora Áurea');
+    expect(dialog).toHaveTextContent('Introdução');
+    expect(dialog.querySelector('pre')?.textContent).toBe('G\nLetra e cifra salvas');
+    expect(dialog).not.toHaveTextContent('null');
+    expect(dialog).not.toHaveTextContent('undefined');
+  });
+
+  it('edits optional fields and keeps entered values after a save failure', async () => {
+    mocks.listMusics.mockResolvedValue([music]);
+    mocks.updateMusic.mockRejectedValueOnce(new Error('offline'));
+    renderPage();
+
+    await screen.findByText('Canção persistida');
+    fireEvent.click(screen.getByRole('button', { name: 'Editar Canção persistida' }));
+    fireEvent.change(screen.getByLabelText(/Compositor/), { target: { value: '  João Ávila  ' } });
+    fireEvent.change(screen.getByLabelText(/Observações/), { target: { value: 'Introdução\n  Crescendo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar música' }));
+
+    await waitFor(() => expect(mocks.updateMusic).toHaveBeenCalledOnce());
+    expect(screen.getAllByRole('alert')).toHaveLength(2);
+    expect(screen.getByLabelText(/Compositor/)).toHaveValue('  João Ávila  ');
+    expect(screen.getByLabelText(/Observações/)).toHaveValue('Introdução\n  Crescendo');
+    expect(mocks.updateMusic).toHaveBeenCalledWith('song-1', expect.objectContaining({
+      compositor: 'João Ávila',
+      observacoes: 'Introdução\n  Crescendo',
+      licencaOuPermissao: null,
+    }));
+  });
+
+  it('combines normalized content search with the existing key and category filters', async () => {
+    mocks.listMusics.mockResolvedValue([
+      { ...music, titulo: 'Canção de teste', conteudoCifrado: '   G#m7\nLÉT-RA azul', tomOriginal: 'G#m', categorias: ['MPB'] },
+      { ...music, id: 'other', titulo: 'Outra', conteudoCifrado: 'C\nOutra letra', tomOriginal: 'C', categorias: ['Rock'] },
+    ]);
+    renderPage();
+
+    await screen.findByText('Canção de teste');
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '  let-ra   AZUL ' } });
+    fireEvent.change(screen.getByLabelText('Tom:'), { target: { value: 'G#m' } });
+    fireEvent.click(screen.getByRole('button', { name: 'MPB' }));
+
+    expect(screen.getByText('Canção de teste')).toBeInTheDocument();
+    expect(screen.queryByText('Outra')).not.toBeInTheDocument();
   });
 
   it('requires explicit submission before creating a music document', async () => {

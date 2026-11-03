@@ -13,8 +13,10 @@ export type MusicOrigin = 'catalogo' | 'upload_local' | 'google_drive' | 'manual
 export type Music = {
   titulo: string;
   artista: string | null;
+  compositor?: string | null;
   tomOriginal: string | null;
   conteudoCifrado: string;
+  observacoes?: string | null;
   categorias: string[];
   tags: string[];
   momentosLiturgicos: string[];

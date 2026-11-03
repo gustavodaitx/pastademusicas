@@ -17,8 +17,10 @@ usuarios/{uid}
   musicas/{musicaId}
     titulo: string
     artista: string | null
+    compositor?: string | null (máximo 200 caracteres)
     tomOriginal: string | null
     conteudoCifrado: string
+    observacoes?: string | null (máximo 5.000 caracteres)
     categorias, tags, momentosLiturgicos, estilo: string[]
     origemTipo: catalogo | upload_local | google_drive | manual
     driveFileId, arquivoNome, licencaOuPermissao: string | null
@@ -48,6 +50,12 @@ usuarios/{uid}
 ```
 
 O perfil em `usuarios/{uid}` tem tipo `UserProfile` e não é criado automaticamente pelas telas T03. Música, playlist, repertório e preferências são os documentos usados pelos fluxos implementados.
+
+### Compatibilidade da Biblioteca
+
+`compositor` e `observacoes` são opcionais. Documentos criados antes da inclusão desses campos continuam válidos e são exibidos sem metadados ausentes; não é necessária migração em massa. Escritas atuais representam campos opcionais vazios como `null`. Compositor tem limite de 200 caracteres e observações, 5.000 caracteres. Ambos são normalizados nas bordas do texto pelo repository, preservando acentos; observações preservam quebras de linha.
+
+A busca da Biblioteca é feita no cliente sobre a lista já carregada e cobre título, artista, tags e conteúdo de letra/cifra. Ela ignora diferenças entre maiúsculas/minúsculas, acentos e espaços consecutivos. Os filtros locais de tom e categoria podem ser combinados com a busca. A cifra mantém fonte monoespaçada, quebras e espaços, com rolagem horizontal em telas estreitas para preservar alinhamento.
 
 ## Limites validados
 
