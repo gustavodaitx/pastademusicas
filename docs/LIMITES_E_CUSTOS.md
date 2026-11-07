@@ -27,7 +27,21 @@ Este projeto adota como diretriz estrutural a **ausência total de custos obriga
 
 ---
 
-## 3. Diretrizes de Monitoramento e Mitigação
+## 3. Importação local de documentos (T05)
+
+- **Formatos aceitos:** `.txt`, `.docx` e `.pdf` textual. PDF sem texto extraível, como um documento digitalizado em imagem, não é reconhecido; não há OCR.
+- **Limites:** arquivo original de até **5 MiB** e conteúdo extraído/editado de até **800.000 bytes UTF-8**.
+- **Processamento e privacidade:** leitura, validação e extração são realizadas localmente no navegador. Nenhum binário é enviado ou guardado no Firebase. Após confirmação do usuário, o texto e os metadados são persistidos pelo cadastro/repositório da Biblioteca já existente.
+- **Fidelidade:** espaços e quebras de linha são preservados quando disponíveis, mas a extração não garante reproduzir o layout original. DOCX com tabelas/colunas e PDF com posicionamento complexo podem exigir correção manual; PDF.js recompõe espaçamento por posição de forma heurística.
+- **Cancelamento:** limpar ou substituir a seleção impede que o resultado antigo atualize a interface, mas não interrompe imediatamente a extração já iniciada. Os recursos do PDF.js são liberados quando a tarefa de extração termina.
+- **Testes PDF:** os testes automatizados usam mocks do PDF.js para verificar o comportamento do extrator. Eles não substituem teste funcional com arquivos PDF binários reais em navegadores.
+- **Bundle:** no último build revisado, o chunk principal tinha aproximadamente **855 kB**, com aviso do Vite para chunks acima de 500 kB. Mammoth e PDF.js/worker são carregados sob demanda por formato; os artefatos ainda podem ser pesados.
+- **Dependências e licenças:** Mammoth (`mammoth`) é open-source sob BSD 2-Clause; PDF.js (`pdfjs-dist`) é open-source sob Apache 2.0. Ambas já fazem parte das dependências da implementação T05.1 e são executadas localmente.
+- **Firebase:** a funcionalidade não requer Firebase Storage, Cloud Functions ou plano Blaze. A persistência do texto continua usando o Firestore e o fluxo já existente, sujeita às cotas do plano Spark.
+
+---
+
+## 4. Diretrizes de Monitoramento e Mitigação
 
 1. **Sem billing ativo**: Nunca executar `firebase billing:enable` ou vincular formas de pagamento na conta Firebase.
 2. **Consultas eficientes no Firestore**:

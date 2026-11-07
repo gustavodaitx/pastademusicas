@@ -26,3 +26,18 @@ firebase emulators:exec --only firestore --project demo-pasta-de-musica-t03 "npm
 ```
 
 A interface não se conecta automaticamente ao emulador. As telas de Modo Igreja/Barzinho ainda não carregam um repertório salvo integralmente; o Modo Palco atual não seleciona cifras. Não devem apresentar conteúdo de exemplo como persistido.
+
+## Importação local de documentos (T05)
+
+A importação aceita arquivos TXT, DOCX e PDF com camada de texto. O arquivo é lido e processado no navegador; não é enviado para APIs externas nem armazenado como binário no Firebase. A extração não executa OCR e PDFs digitalizados sem camada textual não são reconhecidos.
+
+Em `src/features/import-music/`:
+
+- `fileExtractors.ts` contém os extratores TXT, DOCX e PDF. TXT é decodificado como UTF-8; DOCX usa Mammoth para extrair texto bruto; PDF.js reconstitui linhas e espaços de forma heurística a partir da posição dos itens textuais.
+- `fileExtractorTypes.ts` define erros tipados usados pelos extratores e validações.
+- `fileImportValidation.ts` verifica formato, tamanho e conteúdo, e carrega os extratores/parsers sob demanda. Mammoth só é importado para DOCX e PDF.js/worker só para PDF.
+- `importMusicDraft.ts` define e valida o rascunho textual e seus metadados mínimos para trânsito entre as telas.
+
+`ImportMusicPage.tsx` seleciona o arquivo, apresenta erros e a prévia editável e encaminha o texto, o nome original e o formato em estado de navegação. `LibraryPage.tsx` valida esse rascunho e preenche o formulário existente da T04; o salvamento continua explícito e usa o `musicRepository` atual. A música é gravada no mesmo modelo e fluxo da Biblioteca com `origemTipo: upload_local`, `arquivoNome` igual ao nome original e `driveFileId: null`. Somente texto editado e metadados seguem para a persistência; o arquivo binário não é armazenado.
+
+Limites de tamanho, custos e limitações de fidelidade estão detalhados em [LIMITES_E_CUSTOS.md](LIMITES_E_CUSTOS.md).
