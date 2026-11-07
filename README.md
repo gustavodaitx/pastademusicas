@@ -9,7 +9,7 @@ Aplicação web responsiva para organizar cifras privadas, playlists, repertóri
 - Playlists e repertórios privados com inclusão, remoção e ordenação de músicas da biblioteca.
 - Preferências privadas de tema, tamanho da fonte e velocidade de autoscroll.
 - Preferências de tema disponíveis no `localStorage` para inicialização local; fonte e velocidade ficam em cache local por UID.
-- Seleção local de arquivos para a etapa futura de importação. Extração, pré-visualização e gravação ainda não estão implementadas.
+- Importação local de TXT, DOCX e PDF textual: extração e pré-visualização editável no navegador, com encaminhamento do texto ao formulário existente da Biblioteca para revisão e salvamento explícito. Os arquivos binários não são armazenados.
 
 Os modos Igreja, Barzinho e Palco ainda não selecionam e carregam repertórios/músicas salvos como uma experiência completa. Eles não exibem dados fixos como conteúdo persistido. Consulte [Limitações](docs/INTEGRACAO_FIRESTORE.md#limites-e-cuidados).
 

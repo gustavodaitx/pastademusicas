@@ -408,10 +408,10 @@ Aceite: usuário não acessa dados privados de outro usuário; ADMIN é protegid
 [ ] T04 — Biblioteca e pesquisa
 Implementar cadastro/listagem, filtros e visualização.
 Aceite: pesquisar e abrir músicas de exemplo e próprias.
-[ ] T05 — Importação local
+[x] T05 — Importação local
 DOCX, PDF textual e TXT, com pré-visualização.
 Testar arquivo válido, vazio, inválido e grande demais.
-Aceite: usuário revisa antes de salvar; erros são claros.
+Aceite: usuário revisa antes de salvar; erros são claros. Implementada nas subtarefas T05.1–T05.6; veja `TASK.md` e `docs/ARQUITETURA.md`.
 [ ] T06 — Playlists manuais
 Criar, editar, reordenar, remover itens e salvar.
 Aceite: ordem permanece após recarregar e reabrir.

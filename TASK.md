@@ -13,7 +13,7 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 - [x] **T02 — Autenticação Firebase e proteção de rotas** `[CONCLUÍDA]`
 - [ ] **T03 — Modelo de dados Firestore e regras de segurança** `[CONCLUÍDA]`
 - [x] **T04 — Biblioteca de músicas, cadastro, pesquisa e visualização** `[CONCLUÍDA]`
-- [ ] **T05 — Importação local de documentos (DOCX, PDF textual, TXT)** `[PENDENTE]`
+- [x] **T05 — Importação local de documentos (DOCX, PDF textual, TXT)** `[CONCLUÍDA]`
 - [ ] **T06 — Playlists manuais (CRUD, ordenação e persistência)** `[PENDENTE]`
 - [ ] **T07 — Modo Igreja (10 momentos fixos e sugestões do catálogo)** `[PENDENTE]`
 - [ ] **T08 — Modo Barzinho (geração assistida com filtros e alternância)** `[PENDENTE]`
@@ -149,21 +149,26 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição de acorde
 
 ---
 
-### [ ] T05 — Importação Local de Documentos (DOCX, PDF textual, TXT)
-- **Estado**: `PENDENTE`
-- **Objetivo**: Implementar processamento 100% no navegador para arquivos `.docx`, `.pdf` e `.txt`, com extração de texto, pré-visualização interativa, formulário de revisão de metadados e salvamento confirmado.
+### [x] T05 — Importação Local de Documentos (DOCX, PDF textual, TXT)
+- **Estado**: `CONCLUÍDA`
+- **Objetivo**: Processar localmente arquivos `.docx`, `.pdf` textual e `.txt`, permitindo extrair e editar o texto antes de encaminhá-lo ao formulário existente da Biblioteca e salvar somente após confirmação explícita.
 - **Dependências**: T04.
 - **Subtarefas**:
-  - [ ] Criar parser de TXT com preservação de quebras de linha (`\n`) e espaçamento.
-  - [ ] Integrar `mammoth.js` para extração de parágrafos de arquivos DOCX.
-  - [ ] Integrar `pdfjs-dist` para extração de texto de PDFs com camada vetorial.
-  - [ ] Implementar detecção de arquivos vazios, inválidos, excedendo limite de tamanho ou PDFs escaneados sem texto.
-  - [ ] Modal de pré-visualização do texto extraído com opções de edição de título, tom e artista antes do salvamento.
+  - [x] **T05.1 — Extratores**: TXT, DOCX (Mammoth) e PDF textual (PDF.js), com processamento local e carregamento sob demanda dos parsers.
+  - [x] **T05.2 — Validações e limites**: formatos permitidos, arquivo até 5 MiB, conteúdo até 800.000 bytes UTF-8 e erros tipados para arquivos/conteúdo inválidos.
+  - [x] **T05.3 — Interface e pré-visualização**: seleção, estados de extração, edição da prévia, revalidação após edição, limpeza e substituição de arquivo.
+  - [x] **T05.4 — Integração com a Biblioteca**: encaminhar texto e nome do arquivo ao formulário existente; persistir pela T04 com `origemTipo: upload_local`, sem guardar o binário e mediante confirmação explícita.
+  - [x] **T05.5 — Estabilização**: testes de extratores, validação, interface, integração, preservação do conteúdo em erros e regressão do cadastro manual/edição.
+  - [x] **T05.6 — Documentação e encerramento**: atualizar roadmap, arquitetura, limites/custos e descrição das funcionalidades.
 - **Testes Obrigatórios**:
-  - [ ] Testes unitários com arquivos simulados de TXT, DOCX e PDF textual.
-  - [ ] Teste de rejeição amigável para PDFs escaneados ou arquivos corrompidos.
+  - [x] Testes de extratores, validações e estados da interface para TXT, DOCX e PDF, incluindo arquivos inválidos, vazios, protegidos por senha e limites.
+  - [x] Testes de integração do rascunho editado com o cadastro existente, confirmação explícita, retorno à prévia, erro de persistência e regressão do cadastro manual/edição.
+  - [x] Suíte geral: 94 testes aprovados; 25 testes Firestore aprovados com o emulador ativo.
+  - [x] `npm run typecheck`, `npm test`, `npm run build`, `npm run lint` e `git diff --check`.
 - **Critérios de Aceite**:
-  - Nenhum documento é enviado para APIs externas pagas; confirmação obrigatória antes de persistir.
+  - [x] Extração feita localmente, sem envio do documento a serviços externos; confirmação obrigatória antes de persistir pela T04.
+  - [x] A origem `upload_local` e o nome original são registrados sem persistir o arquivo binário.
+  - [x] Limitações de OCR, fidelidade de formatação, cobertura dos testes PDF e tamanho de bundle documentadas em `docs/LIMITES_E_CUSTOS.md`.
 
 ---
 
