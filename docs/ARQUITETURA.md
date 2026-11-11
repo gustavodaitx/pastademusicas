@@ -15,6 +15,12 @@ O projeto é uma SPA React/TypeScript executada no navegador. Authentication e F
 
 Dados ficam em `usuarios/{uid}`: `musicas`, `playlists/{id}/itens`, `repertorios/{id}/itens` e `configuracoes/preferencias`. Listas usam subcoleções de itens. Não há catálogo público ou documentos globais no escopo atual. Veja o [modelo de dados](MODELO_DE_DADOS.md) e o [guia da integração](INTEGRACAO_FIRESTORE.md).
 
+## Playlists manuais (T06)
+
+`PlaylistsPage.tsx` oferece CRUD de playlists privadas, edição de nome/tipo, duplicação, inclusão e remoção de músicas existentes e edição do tom personalizado em cada item. Itens referenciam a música pelo ID e guardam posição, momento e tom personalizado; excluir playlist ou remover item não exclui documentos da Biblioteca. Referências cuja música foi excluída permanecem visíveis como indisponíveis até remoção manual.
+
+`playlistRepository.ts` valida dados e UID, usa transações para inclusão, remoção e reordenação e lotes limitados para duplicação compensável. A reordenação pela interface aceita botões, setas do teclado e HTML drag-and-drop nativo; os botões permanecem como alternativa quando arrastar não estiver disponível. A lista é limitada a 400 itens por operação de mutação.
+
 O tema usa cache local para inicialização; a tela Configurações sincroniza preferências com o Firestore. Fonte e velocidade têm cache local separado por UID para Modo Palco.
 
 ## Validação e emulação

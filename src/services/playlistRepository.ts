@@ -9,6 +9,7 @@ import {
   runTransaction,
   serverTimestamp,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import type { Firestore, QueryDocumentSnapshot } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -27,16 +28,31 @@ export class PlaylistRepositoryError extends Error {
 }
 
 const maxItemsPerPlaylist = 400;
+const maxPlaylistNameLength = 120;
+const playlistCopySuffix = ' (cópia)';
+const maxItemsPerCopyBatch = 10;
 
 function validateName(name: string): string {
   if (typeof name !== 'string' || name.trim().length === 0) {
     throw new PlaylistRepositoryError('Informe o nome da playlist.', 'validation/required');
   }
   const normalized = name.trim();
-  if (normalized.length > 120) {
+  if (normalized.length > maxPlaylistNameLength) {
     throw new PlaylistRepositoryError('O nome da playlist aceita até 120 caracteres.', 'validation/too-long');
   }
   return normalized;
+}
+
+function copyName(name: string): string {
+  const normalized = validateName(name);
+  const maxBaseLength = maxPlaylistNameLength - playlistCopySuffix.length;
+  let baseName = '';
+  for (const character of normalized) {
+    if (baseName.length + character.length > maxBaseLength) break;
+    baseName += character;
+  }
+  baseName = baseName.trimEnd();
+  return validateName(`${baseName}${playlistCopySuffix}`);
 }
 
 function validateType(type: PlaylistType): PlaylistType {
@@ -70,6 +86,35 @@ function wrapError(error: unknown): PlaylistRepositoryError {
 
 function asItem(snapshot: QueryDocumentSnapshot): PlaylistItemRecord {
   return { id: snapshot.id, ...snapshot.data() } as PlaylistItemRecord;
+}
+
+function validatePlaylistItem(item: PlaylistItemRecord): PlaylistItemRecord {
+  if (item.musicaId !== item.id) {
+    throw new PlaylistRepositoryError('A playlist contém uma referência de música inválida.', 'invalid-music-reference');
+  }
+  validateId(item.musicaId, 'da música');
+  if (!Number.isInteger(item.posicao) || item.posicao < 1) {
+    throw new PlaylistRepositoryError('A playlist contém uma posição inválida.', 'validation/item');
+  }
+  if (item.momento !== null && (typeof item.momento !== 'string' || item.momento.length > 100)) {
+    throw new PlaylistRepositoryError('A playlist contém um momento inválido.', 'validation/item');
+  }
+  if (item.tomPersonalizado !== null && (typeof item.tomPersonalizado !== 'string' || item.tomPersonalizado.length > 12)) {
+    throw new PlaylistRepositoryError('A playlist contém um tom personalizado inválido.', 'validation/item');
+  }
+  return item;
+}
+
+function validatePersonalizedKey(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') {
+    throw new PlaylistRepositoryError('O tom personalizado deve ser texto.', 'validation/type');
+  }
+  const normalized = value.trim();
+  if (normalized.length > 12) {
+    throw new PlaylistRepositoryError('O tom personalizado aceita até 12 caracteres.', 'validation/too-long');
+  }
+  return normalized || null;
 }
 
 export function createPlaylistRepository(firestore: Firestore | null, getUid: () => string | null) {
@@ -136,10 +181,124 @@ export function createPlaylistRepository(firestore: Firestore | null, getUid: ()
       }
     },
 
-    async renamePlaylist(playlistId: string, name: string): Promise<void> {
+    async updatePlaylistItemKey(playlistId: string, musicId: string, personalizedKey: string | null): Promise<void> {
+      try {
+        validateId(musicId, 'da música');
+        await updateDoc(doc(playlistItemsCollection(playlistId), musicId), {
+          tomPersonalizado: validatePersonalizedKey(personalizedKey),
+        });
+      } catch (error) {
+        throw wrapError(error);
+      }
+    },
+
+    async duplicatePlaylist(playlistId: string): Promise<string> {
+      try {
+        const playlists = userPlaylistCollection();
+        validateId(playlistId, 'da playlist');
+        const uid = requireUid(getUid);
+        const sourceRef = doc(playlists, playlistId);
+        const duplicateRef = doc(playlists);
+        const observedSource = await getDoc(sourceRef);
+        if (!observedSource.exists()) {
+          throw new PlaylistRepositoryError('A playlist não foi encontrada.', 'not-found');
+        }
+        const observedItems = await getItems(playlistId);
+        if (observedItems.length > maxItemsPerPlaylist) {
+          throw new PlaylistRepositoryError(`Não é possível duplicar mais de ${maxItemsPerPlaylist} músicas em uma operação.`, 'validation/too-many-items');
+        }
+
+        let itemsToCopy: PlaylistItemRecord[] = [];
+
+        try {
+          await runTransaction(firestore!, async (transaction) => {
+            const [sourceSnapshot, itemSnapshots] = await Promise.all([
+              transaction.get(sourceRef),
+              Promise.all(observedItems.map((item) => transaction.get(doc(sourceRef, 'itens', item.id)))),
+            ]);
+            if (!sourceSnapshot.exists()) {
+              throw new PlaylistRepositoryError('A playlist não foi encontrada.', 'not-found');
+            }
+            if (!sourceSnapshot.data().updatedAt.isEqual(observedSource.data().updatedAt)) {
+              throw new PlaylistRepositoryError('A playlist mudou. Atualize e tente duplicar novamente.', 'validation/stale-playlist');
+            }
+
+            const sourceData = sourceSnapshot.data();
+            const name = copyName(sourceData.nome);
+            const type = validateType(sourceData.tipo);
+            if (itemSnapshots.some((snapshot) => !snapshot.exists())) {
+              throw new PlaylistRepositoryError('A lista de músicas mudou. Atualize a playlist e tente duplicar novamente.', 'validation/stale-playlist');
+            }
+            const items = itemSnapshots.map((snapshot, index) => {
+              const item = validatePlaylistItem({ id: snapshot.id, ...snapshot.data() } as PlaylistItemRecord);
+              const observed = observedItems[index];
+              if (item.musicaId !== observed.musicaId
+                || item.posicao !== observed.posicao
+                || item.momento !== observed.momento
+                || item.tomPersonalizado !== observed.tomPersonalizado) {
+                throw new PlaylistRepositoryError('A lista de músicas mudou. Atualize a playlist e tente duplicar novamente.', 'validation/stale-playlist');
+              }
+              return item;
+            });
+            const musicSnapshots = await Promise.all(
+              items.map((item) => transaction.get(doc(firestore!, 'usuarios', uid, 'musicas', item.musicaId))),
+            );
+            if (musicSnapshots.some((snapshot) => !snapshot.exists())) {
+              throw new PlaylistRepositoryError('A playlist contém uma música que não existe na sua biblioteca.', 'invalid-music-reference');
+            }
+
+            itemsToCopy = items;
+            transaction.set(duplicateRef, {
+              nome: name,
+              tipo: type,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          });
+
+          for (let offset = 0; offset < itemsToCopy.length; offset += maxItemsPerCopyBatch) {
+            const batch = writeBatch(firestore!);
+            itemsToCopy
+              .slice(offset, offset + maxItemsPerCopyBatch)
+              .forEach((item) => {
+                batch.set(doc(duplicateRef, 'itens', item.musicaId), {
+                  musicaId: item.musicaId,
+                  posicao: item.posicao,
+                  momento: item.momento,
+                  tomPersonalizado: item.tomPersonalizado,
+                });
+              });
+            await batch.commit();
+          }
+
+          return duplicateRef.id;
+        } catch (error) {
+          try {
+            const cleanup = writeBatch(firestore!);
+            itemsToCopy.forEach((item) => cleanup.delete(doc(duplicateRef, 'itens', item.musicaId)));
+            cleanup.delete(duplicateRef);
+            await cleanup.commit();
+          } catch (cleanupError) {
+            const code = typeof cleanupError === 'object' && cleanupError !== null && 'code' in cleanupError
+              ? String(cleanupError.code)
+              : 'firestore/cleanup-failed';
+            throw new PlaylistRepositoryError(
+              'A duplicação falhou e não foi possível limpar a cópia incompleta. Atualize suas playlists e tente novamente.',
+              code,
+            );
+          }
+          throw error;
+        }
+      } catch (error) {
+        throw wrapError(error);
+      }
+    },
+
+    async updatePlaylist(playlistId: string, input: PlaylistInput): Promise<void> {
       try {
         await updateDoc(playlistDocument(playlistId), {
-          nome: validateName(name),
+          nome: validateName(input.nome),
+          tipo: validateType(input.tipo),
           updatedAt: serverTimestamp(),
         });
       } catch (error) {
@@ -292,7 +451,9 @@ const repository = createPlaylistRepository(db, () => auth?.currentUser?.uid ?? 
 export const createPlaylist = repository.createPlaylist;
 export const listPlaylists = repository.listPlaylists;
 export const getPlaylistById = repository.getPlaylistById;
-export const renamePlaylist = repository.renamePlaylist;
+export const updatePlaylistItemKey = repository.updatePlaylistItemKey;
+export const duplicatePlaylist = repository.duplicatePlaylist;
+export const updatePlaylist = repository.updatePlaylist;
 export const deletePlaylist = repository.deletePlaylist;
 export const addMusicToPlaylist = repository.addMusicToPlaylist;
 export const removeMusicFromPlaylist = repository.removeMusicFromPlaylist;

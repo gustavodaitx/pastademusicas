@@ -6,7 +6,7 @@ Aplicação web responsiva para organizar cifras privadas, playlists, repertóri
 
 - Cadastro, login, logout, recuperação de senha e proteção de rotas com Firebase Authentication.
 - Biblioteca privada com cadastro, consulta, edição e exclusão de músicas no Firestore.
-- Playlists e repertórios privados com inclusão, remoção e ordenação de músicas da biblioteca.
+- Playlists privadas: criação, edição de nome/tipo, duplicação, exclusão sem apagar músicas da Biblioteca, inclusão e remoção de referências, tons personalizados por item e reordenação por botões, teclado ou arraste.
 - Preferências privadas de tema, tamanho da fonte e velocidade de autoscroll.
 - Preferências de tema disponíveis no `localStorage` para inicialização local; fonte e velocidade ficam em cache local por UID.
 - Importação local de TXT, DOCX e PDF textual: extração e pré-visualização editável no navegador, com encaminhamento do texto ao formulário existente da Biblioteca para revisão e salvamento explícito. Os arquivos binários não são armazenados.

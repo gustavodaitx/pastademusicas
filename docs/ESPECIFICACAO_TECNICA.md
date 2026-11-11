@@ -108,10 +108,11 @@ Campo de cifra com preservação de formatação monoespaçada.
 Alterar título, tom, artista, tags e categorias.
 Não transpor acordes por substituição textual ingênua.
 Playlists
-Listar, criar, renomear, duplicar e excluir playlist própria.
-Adicionar/remover músicas.
-Reordenar por drag-and-drop com alternativa acessível por botões “subir/descer”.
-Salvar e reabrir com ordem preservada.
+Listar, criar, editar nome e tipo, duplicar e excluir playlist própria sem excluir músicas da Biblioteca.
+Adicionar/remover referências a músicas existentes; referências órfãs são mostradas como indisponíveis e podem ser removidas.
+Editar/limpar tom personalizado por item sem alterar o tom original da Biblioteca.
+Reordenar por drag-and-drop, teclado ou botões acessíveis “subir/descer”.
+Salvar e reabrir mantendo ordem, momento e tom personalizado. Duplicar com novo ID e itens independentes, preservando a sequência e os metadados.
 Criador de playlist — Modo Igreja
 Nome do evento/celebração.
 Dez posições em ordem: Entrada, Perdão, Glória, Salmo, Aclamação, Ofertório, Santo, Comunhão, Pós-comunhão, Final.
@@ -412,9 +413,9 @@ Aceite: pesquisar e abrir músicas de exemplo e próprias.
 DOCX, PDF textual e TXT, com pré-visualização.
 Testar arquivo válido, vazio, inválido e grande demais.
 Aceite: usuário revisa antes de salvar; erros são claros. Implementada nas subtarefas T05.1–T05.6; veja `TASK.md` e `docs/ARQUITETURA.md`.
-[ ] T06 — Playlists manuais
-Criar, editar, reordenar, remover itens e salvar.
-Aceite: ordem permanece após recarregar e reabrir.
+[x] T06 — Playlists manuais — concluída nas etapas T06.1–T06.5; ver estado e validações em `TASK.md`.
+Criar/listar, editar nome/tipo, duplicar, excluir sem apagar músicas, adicionar/remover referências, personalizar o tom e reordenar por botões, teclado ou arraste.
+Aceite: alterações persistem e ordem/metadados permanecem após recarregar e reabrir; dados ficam isolados por UID.
 [ ] T07 — Modo Igreja
 Dez momentos na ordem definida e sugestões apenas do catálogo.
 Aceite: não inventa músicas; posições sem correspondência ficam vazias.

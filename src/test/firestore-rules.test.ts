@@ -6,7 +6,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { Timestamp, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { Timestamp, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createMusicRepository, MusicRepositoryError } from '../services/musicRepository';
@@ -247,6 +247,11 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
     const otherDb = testEnvironment.authenticatedContext('different-owner').firestore();
     await assertSucceeds(setDoc(doc(otherDb, 'usuarios/different-owner/musicas/other-song'), withCurrentTimestamps(music)));
     await assertSucceeds(setDoc(doc(ownerDb, 'usuarios/playlist-owner/playlists/list-1'), withCurrentTimestamps(playlist)));
+    await assertFails(updateDoc(doc(otherDb, 'usuarios/playlist-owner/playlists/list-1'), {
+      nome: 'Alteração de outro usuário',
+      tipo: 'igreja',
+      updatedAt: serverTimestamp(),
+    }));
 
     const orphanItem = doc(ownerDb, 'usuarios/playlist-owner/playlists/missing-list/itens/own-song');
     await assertFails(setDoc(orphanItem, { ...playlistItem, musicaId: 'own-song' }));
@@ -259,6 +264,9 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
     await assertSucceeds(setDoc(doc(items, 'own-song'), { ...playlistItem, musicaId: 'own-song' }));
     await assertFails(setDoc(doc(items, 'duplicate-entry'), { ...playlistItem, musicaId: 'own-song' }));
     await assertSucceeds(updateDoc(doc(items, 'own-song'), { posicao: 2 }));
+    await assertFails(updateDoc(doc(otherDb, 'usuarios/playlist-owner/playlists/list-1/itens/own-song'), {
+      tomPersonalizado: 'D',
+    }));
     await assertFails(updateDoc(doc(items, 'own-song'), { musicaId: 'other-song' }));
   });
 
@@ -386,7 +394,7 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
       .rejects.toMatchObject({ code: 'permission-denied', message: 'Não foi possível salvar ou carregar a música. Tente novamente.' });
   });
 
-  it('playlist repository creates, lists, reads, renames and deletes playlists with their items', async () => {
+  it('playlist repository creates, lists, reads, edits and deletes playlists with their items', async () => {
     const playlists = playlistsFor('playlist-owner');
     const songs = repositoryFor('playlist-owner');
     const playlistId = await playlists.createPlaylist(playlistInput);
@@ -397,9 +405,29 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
     expect(empty?.createdAt).toBeInstanceOf(Timestamp);
 
     const songId = await songs.createMusic(musicInput);
+    const secondSongId = await songs.createMusic({ ...musicInput, titulo: 'Segunda música' });
     await playlists.addMusicToPlaylist(playlistId, songId);
-    await playlists.renamePlaylist(playlistId, 'Renomeada');
-    expect((await playlists.getPlaylistById(playlistId))?.nome).toBe('Renomeada');
+    await playlists.addMusicToPlaylist(playlistId, secondSongId);
+    await playlists.reorderPlaylistItems(playlistId, [secondSongId, songId]);
+    const ownerDb = testEnvironment.authenticatedContext('playlist-owner').firestore();
+    await updateDoc(doc(ownerDb, `usuarios/playlist-owner/playlists/${playlistId}/itens/${secondSongId}`), {
+      momento: 'Entrada',
+      tomPersonalizado: 'D',
+    });
+    const updatedInput: PlaylistInput = { nome: 'Renomeada', tipo: 'igreja' };
+    const beforeUpdate = await playlists.getPlaylistById(playlistId);
+    expect(beforeUpdate?.itens.map(({ musicaId, posicao, momento, tomPersonalizado }) => [
+      musicaId, posicao, momento, tomPersonalizado,
+    ])).toEqual([
+      [secondSongId, 1, 'Entrada', 'D'],
+      [songId, 2, null, null],
+    ]);
+    await playlists.updatePlaylist(playlistId, updatedInput);
+    const reloaded = await playlists.getPlaylistById(playlistId);
+    expect(reloaded).toMatchObject(updatedInput);
+    expect(reloaded?.itens).toEqual(beforeUpdate?.itens);
+    expect(await songs.getMusicById(songId)).not.toBeNull();
+    expect(await songs.getMusicById(secondSongId)).not.toBeNull();
 
     await playlists.deletePlaylist(playlistId);
     expect(await playlists.getPlaylistById(playlistId)).toBeNull();
@@ -410,6 +438,180 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
       ));
       expect(remainingItems.size).toBe(0);
     });
+  });
+
+  it('playlist repository duplicates an empty playlist with a new ID and leaves the original unchanged', async () => {
+    const playlists = playlistsFor('playlist-owner');
+    const sourceId = await playlists.createPlaylist({ nome: 'Lista vazia', tipo: 'barzinho' });
+
+    const duplicateId = await playlists.duplicatePlaylist(sourceId);
+    const source = await playlists.getPlaylistById(sourceId);
+    const duplicate = await playlists.getPlaylistById(duplicateId);
+
+    expect(duplicateId).not.toBe(sourceId);
+    expect(source).toMatchObject({ nome: 'Lista vazia', tipo: 'barzinho', itens: [] });
+    expect(duplicate).toMatchObject({ nome: 'Lista vazia (cópia)', tipo: 'barzinho', itens: [] });
+    expect((await playlists.listPlaylists()).map(({ id }) => id)).toEqual(expect.arrayContaining([sourceId, duplicateId]));
+
+    const unicodeSourceId = await playlists.createPlaylist({ nome: '🎵'.repeat(60), tipo: 'manual' });
+    const unicodeCopyId = await playlists.duplicatePlaylist(unicodeSourceId);
+    const unicodeCopy = await playlists.getPlaylistById(unicodeCopyId);
+    expect(unicodeCopy?.nome).toBe(`${'🎵'.repeat(56)} (cópia)`);
+    expect(unicodeCopy?.nome.length).toBeLessThanOrEqual(120);
+  });
+
+  it('playlist repository duplicates items in order without changing music documents or the source', async () => {
+    const playlists = playlistsFor('playlist-owner');
+    const songs = repositoryFor('playlist-owner');
+    const sourceId = await playlists.createPlaylist({ nome: 'Lista completa', tipo: 'igreja' });
+    const firstId = await songs.createMusic({ ...musicInput, titulo: 'Primeira música' });
+    const secondId = await songs.createMusic({ ...musicInput, titulo: 'Segunda música' });
+    const thirdId = await songs.createMusic({ ...musicInput, titulo: 'Terceira música' });
+
+    await playlists.addMusicToPlaylist(sourceId, firstId);
+    await playlists.addMusicToPlaylist(sourceId, secondId);
+    await playlists.addMusicToPlaylist(sourceId, thirdId);
+    await playlists.reorderPlaylistItems(sourceId, [thirdId, firstId, secondId]);
+    const ownerDb = testEnvironment.authenticatedContext('playlist-owner').firestore();
+    await updateDoc(doc(ownerDb, `usuarios/playlist-owner/playlists/${sourceId}/itens/${thirdId}`), {
+      momento: 'Entrada',
+      tomPersonalizado: 'D',
+    });
+    const originalBefore = await playlists.getPlaylistById(sourceId);
+    const musicBefore = await songs.listMusics();
+
+    const duplicateId = await playlists.duplicatePlaylist(sourceId);
+    const originalAfter = await playlists.getPlaylistById(sourceId);
+    const duplicate = await playlists.getPlaylistById(duplicateId);
+
+    expect(duplicateId).not.toBe(sourceId);
+    expect(duplicate).toMatchObject({ nome: 'Lista completa (cópia)', tipo: 'igreja' });
+    expect(duplicate?.itens).toEqual(originalBefore?.itens);
+    expect(originalAfter).toEqual(originalBefore);
+    expect(await songs.listMusics()).toEqual(musicBefore);
+    expect((await playlists.listPlaylists()).map(({ id }) => id)).toEqual(expect.arrayContaining([sourceId, duplicateId]));
+  });
+
+  it('playlist repository rejects invalid music references without leaving an incomplete duplicate', async () => {
+    const playlists = playlistsFor('playlist-owner');
+    const sourceId = await playlists.createPlaylist(playlistInput);
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `usuarios/playlist-owner/playlists/${sourceId}/itens/missing-song`), {
+        musicaId: 'missing-song',
+        posicao: 1,
+        momento: null,
+        tomPersonalizado: null,
+      });
+    });
+
+    await expect(playlists.duplicatePlaylist(sourceId))
+      .rejects.toMatchObject({ code: 'invalid-music-reference' });
+    expect((await playlists.listPlaylists()).map(({ id }) => id)).toEqual([sourceId]);
+  });
+
+  it('playlist repository isolates duplication to the authenticated UID', async () => {
+    const owner = playlistsFor('playlist-owner-a');
+    const otherUser = playlistsFor('playlist-owner-b');
+    const sourceId = await owner.createPlaylist(playlistInput);
+
+    await expect(otherUser.duplicatePlaylist(sourceId)).rejects.toMatchObject({ code: 'not-found' });
+    expect(await owner.getPlaylistById(sourceId)).toMatchObject(playlistInput);
+    expect(await otherUser.listPlaylists()).toEqual([]);
+  });
+
+  it('playlist repository duplicates, reorders and deletes playlists with 400 items', async () => {
+    const playlists = playlistsFor('playlist-owner');
+    const sourceId = await playlists.createPlaylist(playlistInput);
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const musicBatch = writeBatch(db);
+      for (let index = 0; index < 400; index += 1) {
+        const musicId = `song-${index}`;
+        musicBatch.set(doc(db, `usuarios/playlist-owner/musicas/${musicId}`), {
+          ...music,
+          titulo: `Música ${index}`,
+        });
+      }
+      await musicBatch.commit();
+
+      const itemBatch = writeBatch(db);
+      for (let index = 0; index < 400; index += 1) {
+        const musicId = `song-${index}`;
+        itemBatch.set(doc(db, `usuarios/playlist-owner/playlists/${sourceId}/itens/${musicId}`), {
+          musicaId: musicId,
+          posicao: index + 1,
+          momento: index === 0 ? 'Entrada' : null,
+          tomPersonalizado: index === 0 ? 'D' : null,
+        });
+      }
+      await itemBatch.commit();
+    });
+
+    const duplicateId = await playlists.duplicatePlaylist(sourceId);
+    const duplicate = await playlists.getPlaylistById(duplicateId);
+    expect(duplicate?.itens).toHaveLength(400);
+    expect(duplicate?.itens[0]).toMatchObject({ musicaId: 'song-0', posicao: 1, momento: 'Entrada', tomPersonalizado: 'D' });
+    expect(duplicate?.itens[399]).toMatchObject({ musicaId: 'song-399', posicao: 400, momento: null, tomPersonalizado: null });
+
+    const reversedIds = Array.from({ length: 400 }, (_, index) => `song-${399 - index}`);
+    await playlists.reorderPlaylistItems(duplicateId, reversedIds);
+    const reorderedCopy = await playlists.getPlaylistById(duplicateId);
+    expect(reorderedCopy?.itens[0]).toMatchObject({ musicaId: 'song-399', posicao: 1, momento: null, tomPersonalizado: null });
+    expect(reorderedCopy?.itens[399]).toMatchObject({ musicaId: 'song-0', posicao: 400, momento: 'Entrada', tomPersonalizado: 'D' });
+
+    await playlists.deletePlaylist(sourceId);
+    expect(await playlists.getPlaylistById(sourceId)).toBeNull();
+    expect(await repositoryFor('playlist-owner').listMusics()).toHaveLength(400);
+  }, 60000);
+
+  it('playlist item personalized keys persist, can be changed or cleared, and preserve other data', async () => {
+    const playlists = playlistsFor('playlist-owner');
+    const songs = repositoryFor('playlist-owner');
+    const firstPlaylistId = await playlists.createPlaylist(playlistInput);
+    const secondPlaylistId = await playlists.createPlaylist({ nome: 'Outra lista', tipo: 'manual' });
+    const songId = await songs.createMusic({ ...musicInput, tomOriginal: 'G' });
+    await playlists.addMusicToPlaylist(firstPlaylistId, songId);
+    await playlists.addMusicToPlaylist(secondPlaylistId, songId);
+    await playlists.reorderPlaylistItems(firstPlaylistId, [songId]);
+    const ownerDb = testEnvironment.authenticatedContext('playlist-owner').firestore();
+    await updateDoc(doc(ownerDb, `usuarios/playlist-owner/playlists/${firstPlaylistId}/itens/${songId}`), {
+      posicao: 4,
+      momento: 'Entrada',
+    });
+
+    await playlists.updatePlaylistItemKey(firstPlaylistId, songId, 'D');
+    expect((await playlists.getPlaylistById(firstPlaylistId))?.itens[0]).toMatchObject({
+      musicaId: songId,
+      posicao: 4,
+      momento: 'Entrada',
+      tomPersonalizado: 'D',
+    });
+    await playlists.updatePlaylistItemKey(firstPlaylistId, songId, 'F#m');
+    await playlists.updatePlaylistItemKey(firstPlaylistId, songId, '');
+
+    expect((await playlists.getPlaylistById(firstPlaylistId))?.itens[0]).toMatchObject({
+      musicaId: songId,
+      posicao: 4,
+      momento: 'Entrada',
+      tomPersonalizado: null,
+    });
+    expect((await playlists.getPlaylistById(secondPlaylistId))?.itens[0].tomPersonalizado).toBeNull();
+    expect((await songs.getMusicById(songId))?.tomOriginal).toBe('G');
+  });
+
+  it('playlist item personalized key updates are isolated by UID and validate their length', async () => {
+    const owner = playlistsFor('playlist-owner-a');
+    const otherUser = playlistsFor('playlist-owner-b');
+    const songs = repositoryFor('playlist-owner-a');
+    const playlistId = await owner.createPlaylist(playlistInput);
+    const musicId = await songs.createMusic(musicInput);
+    await owner.addMusicToPlaylist(playlistId, musicId);
+
+    await expect(otherUser.updatePlaylistItemKey(playlistId, musicId, 'D'))
+      .rejects.toMatchObject({ code: 'permission-denied' });
+    await expect(owner.updatePlaylistItemKey(playlistId, musicId, 'D'.repeat(13)))
+      .rejects.toMatchObject({ code: 'validation/too-long' });
+    expect((await owner.getPlaylistById(playlistId))?.itens[0].tomPersonalizado).toBeNull();
   });
 
   it('playlist repository adds unique songs, reorders them and compacts positions after removal', async () => {
@@ -425,9 +627,25 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
     await playlists.addMusicToPlaylist(playlistId, thirdId);
     await expect(playlists.addMusicToPlaylist(playlistId, secondId)).rejects.toMatchObject({ code: 'already-exists' });
 
+    const ownerDb = testEnvironment.authenticatedContext('playlist-owner').firestore();
+    await updateDoc(doc(ownerDb, `usuarios/playlist-owner/playlists/${playlistId}/itens/${firstId}`), {
+      momento: 'Entrada',
+      tomPersonalizado: 'D',
+    });
+    await updateDoc(doc(ownerDb, `usuarios/playlist-owner/playlists/${playlistId}/itens/${thirdId}`), {
+      momento: 'Final',
+      tomPersonalizado: 'F#m',
+    });
     await playlists.reorderPlaylistItems(playlistId, [thirdId, firstId, secondId]);
-    expect((await playlists.getPlaylistById(playlistId))?.itens.map(({ musicaId, posicao }) => [musicaId, posicao]))
-      .toEqual([[thirdId, 1], [firstId, 2], [secondId, 3]]);
+    expect((await playlists.getPlaylistById(playlistId))?.itens.map(({ musicaId, posicao, momento, tomPersonalizado }) => [
+      musicaId, posicao, momento, tomPersonalizado,
+    ])).toEqual([
+      [thirdId, 1, 'Final', 'F#m'],
+      [firstId, 2, 'Entrada', 'D'],
+      [secondId, 3, null, null],
+    ]);
+    expect((await songs.getMusicById(firstId))?.tomOriginal).toBe('C');
+    expect((await songs.getMusicById(thirdId))?.tomOriginal).toBe('C');
 
     await playlists.removeMusicFromPlaylist(playlistId, firstId);
     expect((await playlists.getPlaylistById(playlistId))?.itens.map(({ musicaId, posicao }) => [musicaId, posicao]))
@@ -451,11 +669,36 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
     expect(await otherUser.getPlaylistById(playlistId)).toBeNull();
   });
 
+  it('keeps playlist references when a library song is deleted and allows explicit removal later', async () => {
+    const playlists = playlistsFor('playlist-owner');
+    const songs = repositoryFor('playlist-owner');
+    const playlistId = await playlists.createPlaylist(playlistInput);
+    const musicId = await songs.createMusic(musicInput);
+    await playlists.addMusicToPlaylist(playlistId, musicId);
+
+    await songs.deleteMusic(musicId);
+    expect(await songs.getMusicById(musicId)).toBeNull();
+    expect((await playlists.getPlaylistById(playlistId))?.itens).toMatchObject([
+      { musicaId: musicId, posicao: 1, momento: null, tomPersonalizado: null },
+    ]);
+
+    await playlists.removeMusicFromPlaylist(playlistId, musicId);
+    expect((await playlists.getPlaylistById(playlistId))?.itens).toEqual([]);
+  });
+
   it('playlist repository reports persistence errors for missing playlists', async () => {
     const repository = playlistsFor('playlist-owner');
-    await expect(repository.renamePlaylist('missing-playlist', 'Nome novo'))
+    await expect(repository.updatePlaylist('missing-playlist', { nome: 'Nome novo', tipo: 'manual' }))
       .rejects.toMatchObject({ code: 'permission-denied' });
     await expect(repository.getPlaylistById('invalid/id')).rejects.toBeInstanceOf(PlaylistRepositoryError);
+  });
+
+  it('playlist repository validates required names before writing', async () => {
+    const repository = playlistsFor('playlist-owner');
+    const playlistId = await repository.createPlaylist(playlistInput);
+    await expect(repository.updatePlaylist(playlistId, { nome: '   ', tipo: 'igreja' }))
+      .rejects.toMatchObject({ code: 'validation/required' });
+    expect((await repository.getPlaylistById(playlistId))?.nome).toBe(playlistInput.nome);
   });
 
   it('repertoire repository creates, lists, reads, renames and deletes repertories with their items', async () => {

@@ -51,6 +51,12 @@ usuarios/{uid}
 
 O perfil em `usuarios/{uid}` tem tipo `UserProfile` e não é criado automaticamente pelas telas T03. Música, playlist, repertório e preferências são os documentos usados pelos fluxos implementados.
 
+### Playlists (T06)
+
+`playlists/{playlistId}` contém somente `nome`, `tipo` (`manual`, `igreja` ou `barzinho`) e timestamps. Cada `itens/{musicaId}` é um documento independente com `musicaId` igual ao ID da música, `posicao` inteira iniciada em 1, `momento` textual opcional (até 100 caracteres) e `tomPersonalizado` textual opcional (até 12 caracteres). O tom personalizado pertence à associação da música com a playlist; não altera `musicas/{musicaId}.tomOriginal`. A duplicação cria novo documento pai e novos documentos de item, preservando a sequência e os metadados; não copia nem modifica documentos da Biblioteca.
+
+Uma música removida da Biblioteca pode deixar sua referência na playlist. A leitura preserva essa associação e a interface a apresenta como indisponível até que o usuário remova o item ou a playlist.
+
 ### Compatibilidade da Biblioteca
 
 `compositor` e `observacoes` são opcionais. Documentos criados antes da inclusão desses campos continuam válidos e são exibidos sem metadados ausentes; não é necessária migração em massa. Escritas atuais representam campos opcionais vazios como `null`. Compositor tem limite de 200 caracteres e observações, 5.000 caracteres. Ambos são normalizados nas bordas do texto pelo repository, preservando acentos; observações preservam quebras de linha.

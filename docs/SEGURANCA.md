@@ -7,7 +7,8 @@ O arquivo [`firestore.rules`](../firestore.rules) é a fonte executável das reg
 - Acesso privado sob `usuarios/{uid}` somente quando `request.auth.uid == uid`.
 - Perfil, músicas, playlists, repertórios e preferências validam campos permitidos, obrigatórios e tipos/tamanhos relevantes.
 - Campos `createdAt` e dados de perfil imutáveis são protegidos em atualizações onde aplicável; timestamps de mutação devem coincidir com `request.time`.
-- Itens de playlist/repertório exigem documento pai existente e referência a música no mesmo UID; `musicaId` deve corresponder ao ID do documento.
+- Criar itens de playlist/repertório exige pai existente e música no mesmo UID; `musicaId` deve corresponder ao ID do documento. Atualizações de item não podem trocar a referência e ficam limitadas a `posicao`, `momento` e `tomPersonalizado`.
+- Itens de playlist pertencem à associação e não alteram a música. A exclusão da música não apaga a associação existente, que continua legível e pode ser removida pelo dono da playlist.
 - Caminhos sem regra específica são negados pela regra final `match /{document=**}`.
 - O cliente Firebase Web não é uma fronteira de confiança; as regras são obrigatórias em produção.
 

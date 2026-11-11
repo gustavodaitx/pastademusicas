@@ -29,6 +29,14 @@ Os documentos não repetem `uid` ou `proprietarioUid`: a propriedade é indicada
 
 Criações e atualizações usam `serverTimestamp()`; as regras verificam que os timestamps de mutação correspondam ao horário da requisição (`request.time`). Os itens de listas ficam em subcoleções, não em arrays no documento pai. Preferências ausentes são criadas com `sistema`, 18 px e velocidade 3 na primeira leitura autenticada.
 
+### Operações de playlist (T06)
+
+- Criar/listar/editar/excluir playlists é restrito ao caminho do UID autenticado. A edição altera nome e tipo, preservando itens.
+- Adicionar um item verifica a existência da playlist, da música do mesmo UID e a ausência de duplicata. Remover um item exclui somente a associação e compacta as posições. Excluir playlist remove explicitamente seus itens antes do pai; os documentos de música permanecem.
+- O tom personalizado atualiza somente `tomPersonalizado` no item. Reordenação atualiza somente `posicao` dos itens e `updatedAt` do pai; drag-and-drop, teclado e botões chamam a mesma operação.
+- Duplicar valida pai, itens e existência das músicas dentro de transação, cria um pai novo com sufixo “(cópia)” e grava itens em lotes de até 10, preservando posição, momento e tom personalizado. Se a gravação falhar, tenta excluir os itens escritos e o pai da cópia; falha também na compensação é sinalizada explicitamente. A origem não é alterada.
+- Repositories limitam operações de lista a 400 itens. Em 400 itens, reordenar ou excluir a playlist grava no máximo 401 documentos na transação; a duplicação grava um pai e 400 itens em lotes pequenos. Esses fluxos usam leituras e gravações do Firestore e não têm paginação ou cache.
+
 ## Regras de segurança
 
 `firestore.rules` restringe leituras e gravações ao dono do caminho, valida campos obrigatórios/tipos/tamanhos, preserva timestamps de criação imutáveis em atualizações e termina em negação global. Música, playlist, repertório, perfil e preferências não podem ser acessados anonimamente ou por outro UID. Itens de lista exigem pai existente e música da mesma conta; seu `musicaId` não pode ser trocado numa atualização.
