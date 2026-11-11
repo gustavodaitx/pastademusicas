@@ -14,7 +14,7 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 - [ ] **T03 — Modelo de dados Firestore e regras de segurança** `[CONCLUÍDA]`
 - [x] **T04 — Biblioteca de músicas, cadastro, pesquisa e visualização** `[CONCLUÍDA]`
 - [x] **T05 — Importação local de documentos (DOCX, PDF textual, TXT)** `[CONCLUÍDA]`
-- [ ] **T06 — Playlists manuais (CRUD, ordenação e persistência)** `[PENDENTE]`
+- [x] **T06 — Playlists manuais (CRUD, ordenação e persistência)** `[CONCLUÍDA]`
 - [ ] **T07 — Modo Igreja (10 momentos fixos e sugestões do catálogo)** `[PENDENTE]`
 - [ ] **T08 — Modo Barzinho (geração assistida com filtros e alternância)** `[PENDENTE]`
 - [ ] **T09 — Modo Palco e rolagem automática (autoscroll)** `[PENDENTE]`
@@ -172,20 +172,27 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição de acorde
 
 ---
 
-### [ ] T06 — Playlists Manuais (CRUD, Ordenação e Persistência)
-- **Estado**: `PENDENTE`
-- **Objetivo**: Permitir ao usuário criar, editar, duplicar, renomear e excluir playlists pessoais, adicionando/removendo músicas e reordenando itens com preservação exata da ordem no banco.
+### [x] T06 — Playlists Manuais (CRUD, Ordenação e Persistência)
+- **Estado**: `CONCLUÍDA` — etapas T06.1 a T06.5 revisadas e validadas.
+- **Objetivo**: Permitir ao usuário criar, listar, editar nome e tipo, duplicar e excluir playlists pessoais, adicionar/remover referências a músicas, editar tons personalizados e reordenar itens sem alterar as músicas da Biblioteca.
 - **Dependências**: T04.
 - **Subtarefas**:
-  - [ ] Criar tela de gerenciamento de playlists.
-  - [ ] Implementar reordenação acessível (botões Subir/Descer) e suporte a arrastar e soltar (drag-and-drop).
-  - [ ] Permitir definir tom personalizado por música na playlist.
-  - [ ] Persistência da ordem das músicas no Firestore (`itens: [{ musicaId, posicao, ... }]`).
+  - [x] Criar tela de gerenciamento e manter CRUD/listagem privados por UID.
+  - [x] Editar nome e tipo sem alterar os itens existentes.
+  - [x] Duplicar com novo ID, itens independentes e preservação de ordem/metadados; compensar falhas de persistência.
+  - [x] Adicionar e remover referências sem criar/apagar documentos da Biblioteca; apresentar referências indisponíveis.
+  - [x] Editar e limpar `tomPersonalizado` por item, sem alterar `tomOriginal`.
+  - [x] Persistir reordenação por botões, teclado e drag-and-drop nativo, preservando IDs e metadados.
+  - [x] Limitar operações de lista a 400 itens e testar duplicação, reordenação e exclusão nesse limite.
 - **Testes Obrigatórios**:
-  - [ ] Teste de reordenação e persistência (garantir que a ordem se mantenha ao recarregar a playlist).
-  - [ ] Testes unitários de manipulação da lista de itens.
+  - [x] Regressão de CRUD, duplicação, inclusão/remoção, referências indisponíveis, tons, acessibilidade, persistência, falhas e isolamento.
+  - [x] `npm test`: 105 passaram; 34 testes Firestore ignorados sem emulador (não contabilizados como aprovados).
+  - [x] `firebase emulators:exec --only firestore --project demo-pasta-de-musica-t03 "npx vitest run --minWorkers=1 --maxWorkers=1"`: 139 passaram, nenhum ignorado.
+  - [x] `npm run typecheck`, `npm run lint`, `npm run build` e `git diff --check`.
 - **Critérios de Aceite**:
-  - Playlist mantém exatamente a sequência configurada pelo usuário após salvar e reabrir.
+  - [x] Playlist mantém sequência e metadados após salvar e reabrir.
+  - [x] Operações permanecem isoladas por UID; excluir playlists/itens não apaga músicas.
+  - [x] Implementação usa Firestore já existente e permanece compatível com Firebase Spark, sem infraestrutura paga adicional.
 
 ---
 

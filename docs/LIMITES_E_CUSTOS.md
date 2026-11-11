@@ -54,3 +54,12 @@ Este projeto adota como diretriz estrutural a **ausência total de custos obriga
 4. **Armazenamento de arquivos**:
    - Binários (como arquivos DOCX ou PDF pesados) **não** devem ser gravados no Firestore para não estourar o limite de 1 GB.
    - Apenas o texto cifrado extraído e metadados leves são salvos.
+
+## 5. Playlists (T06)
+
+- T06 usa somente Firestore já configurado no cliente; não adiciona Firebase Storage, Cloud Functions, serviços pagos ou dependências de drag-and-drop. A solução continua compatível com Spark e sujeita às cotas existentes de leitura, gravação, exclusão e armazenamento.
+- Cada playlist aceita até **400 itens** nas mutações de lista. Esse teto mantém exclusão, remoção e reordenação em até 401 escritas por transação (400 itens e o documento pai). Não aumente o limite sem redesenhar a estratégia em lotes e rever atomicidade.
+- A duplicação usa uma transação para validar/criar o pai e lotes de até 10 documentos para gravar itens. Para uma playlist com 400 itens, são aproximadamente 1.202 leituras (pai e itens observados; depois pai, itens e músicas validados na transação) e até 401 gravações (pai e itens), além de possível compensação de até 401 exclusões se houver falha. A duplicação não copia documentos de música.
+- Reordenação e exclusão com 400 itens podem realizar aproximadamente 802 leituras cada (documentos observados e nova leitura transacional) e até 401 gravações. Operações em listas menores escalam com a quantidade de itens; recarregar detalhes/listagens também consome leituras. Os valores são estimativas de operações da aplicação, sem contar recargas do usuário nem efeitos da camada de regras. Consultas não são paginadas.
+- O arraste usa HTML5 nativo e o suporte pode variar em navegadores móveis. Botões de subir/descer e as setas do teclado são alternativas acessíveis.
+- Excluir uma playlist remove seus itens, não as músicas. Excluir uma música da Biblioteca mantém referências existentes; elas aparecem como indisponíveis e podem ser removidas manualmente. A duplicação depende de que todas as referências ainda apontem para músicas existentes; falhas de persistência acionam tentativa de limpeza compensatória, que também pode falhar e deve ser reportada.
