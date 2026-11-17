@@ -12,6 +12,7 @@ O Firebase Authentication existente é inicializado em `src/lib/firebase.ts` jun
 usuarios/{uid}
   musicas/{musicaId}
   playlists/{playlistId}
+    momentosIgreja: MomentoIgreja[10] (playlists estruturadas v1 ou v2)
     itens/{musicaId}
   repertorios/{repertorioId}
     itens/{musicaId}
@@ -19,6 +20,18 @@ usuarios/{uid}
 ```
 
 Os documentos não repetem `uid` ou `proprietarioUid`: a propriedade é indicada pelo caminho privado. Os IDs dos itens de playlist/repertório são o ID da música e o campo `musicaId` deve coincidir com ele, evitando duplicatas no mesmo conjunto.
+
+### Playlists estruturadas de Igreja (T07)
+
+O documento principal de uma playlist estruturada contém `tipo: igreja`, `versaoEstrutura` 1 ou 2 e dez momentos na ordem canônica. V1 usa `musicaId: string | null`; v2 usa `referenciaMusical: { musicaId: string } | null`. `null` representa posição vazia. O ID aponta para `usuarios/{uid}/musicas/{musicaId}`; não se copia cifra ou metadado para o momento.
+
+Novas criações estruturadas são persistidas em v2. A entrada do repository ainda pode chegar em formato v1 e é normalizada para v2 durante a criação; documentos já salvos não são convertidos. O repository e a tela permitem leitura e edição v1, preservando a versão e os dez momentos; uma cópia v1 permanece v1. Referências órfãs v2 são identificadas na tela e mantidas até remoção ou substituição explícita. As Rules limitam cada atualização a no máximo um momento alterado e preservam momentos não modificados, inclusive referências históricas. A estrutura plana das playlists manuais/legadas da T06 não é migrada nem alterada.
+
+A duplicação estruturada lê a origem dentro de uma transação e grava `copiadaDePlaylist` com seu ID imediato. As Rules confirmam que a origem existe no caminho do mesmo UID e que tipo, versão, chaves e conteúdo dos dez momentos coincidem no momento da cópia. Momentos vazios, tons e referências órfãs são preservados. Após a criação, a cópia pode ser editada independentemente; excluir a origem não a invalida.
+
+A duplicação de música também usa transação e registra a origem imediata em `duplicadaDe`. Na criação, as Rules consultam a música de origem no mesmo UID e comparam o conteúdo musical; somente `duplicadaDe`, `createdAt` e `updatedAt` podem diferir. Não é permitido adicionar, alterar ou remover `duplicadaDe` após criar o documento. Campos musicais da cópia podem ser editados independentemente e a origem pode ser excluída sem invalidá-la.
+
+As Rules validam o esquema das referências embutidas, mas não consultam a existência de cada música nos momentos estruturados. O repository valida as músicas em novas criações e alterações de referência. Na cópia, não faz essa validação, para manter IDs órfãos já armazenados.
 
 | Dados | Campos principais | Repository |
 | --- | --- | --- |
@@ -28,6 +41,7 @@ Os documentos não repetem `uid` ou `proprietarioUid`: a propriedade é indicada
 | Preferências | tema (`claro`, `escuro`, `sistema`), fonte (10–72 px), autoscroll (1–10), `updatedAt` | `preferencesRepository` |
 
 Criações e atualizações usam `serverTimestamp()`; as regras verificam que os timestamps de mutação correspondam ao horário da requisição (`request.time`). Os itens de listas ficam em subcoleções, não em arrays no documento pai. Preferências ausentes são criadas com `sistema`, 18 px e velocidade 3 na primeira leitura autenticada.
+`momentosIgreja` é uma exceção delimitada para estruturas v1/v2: uma sequência fixa de dez posições, não uma lista de tamanho variável.
 
 ### Operações de playlist (T06)
 
@@ -39,9 +53,9 @@ Criações e atualizações usam `serverTimestamp()`; as regras verificam que os
 
 ## Regras de segurança
 
-`firestore.rules` restringe leituras e gravações ao dono do caminho, valida campos obrigatórios/tipos/tamanhos, preserva timestamps de criação imutáveis em atualizações e termina em negação global. Música, playlist, repertório, perfil e preferências não podem ser acessados anonimamente ou por outro UID. Itens de lista exigem pai existente e música da mesma conta; seu `musicaId` não pode ser trocado numa atualização.
+`firestore.rules` restringe leituras e gravações ao dono do caminho, valida esquemas suportados e termina em negação global. Para cópias, as Rules validam a origem autorizada e a igualdade inicial; atualizações preservam imutáveis os campos de linhagem e a versão. Referências de momentos não modificados não precisam existir; em atualizações, referências novas ou substituídas são verificadas. A suíte de `src/test/firestore-rules.test.ts` tem 45 testes e cobre cópias válidas/forjadas, os dez momentos, compatibilidade v1/v2, rejeição de alterações simultâneas e os controles de propriedade. Sem `FIRESTORE_EMULATOR_HOST`, os testes são pulados por `describe.skipIf`.
 
-Os testes de regras estão em `src/test/firestore-rules.test.ts`. Eles cobrem usuário autenticado/anônimo, acesso cruzado, payloads inválidos, referências de músicas inválidas, campos desconhecidos e operações de repositories. `describe.skipIf` pula essa parte se o emulador não estiver ativo; por isso, execute o comando de Emulator Suite abaixo para uma validação completa sem skips.
+Veja [SEGURANCA.md](SEGURANCA.md) para o detalhamento das garantias e da limitação de validação de referências.
 
 ## Console Firebase e variáveis
 
@@ -62,6 +76,13 @@ firebase emulators:exec --only firestore --project demo-pasta-de-musica-t03 "npm
 ```
 
 O ID `demo-pasta-de-musica-t03` é reservado ao ambiente de demonstração local. O comando inicia somente Firestore; os testes fornecem identidades autenticadas simuladas via Rules Unit Testing. `firebase.json` aponta o emulador para `firestore.rules`. O aplicativo web não chama `connectFirestoreEmulator` automaticamente e o teste de interface usa repositories simulados; não aponte a interface a um projeto real para testes destrutivos.
+
+Para executar somente a suíte de Rules no PowerShell com o emulador já iniciado:
+
+```powershell
+$env:FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"
+npx vitest run src/test/firestore-rules.test.ts --reporter=basic
+```
 
 ## Custo e carga
 

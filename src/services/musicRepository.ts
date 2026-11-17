@@ -7,6 +7,7 @@ import {
   getDocs,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore';
@@ -165,6 +166,35 @@ export function createMusicRepository(
       }
     },
 
+    async duplicateMusic(id: string): Promise<string> {
+      try {
+        validateDocumentId(id);
+        const collectionReference = userMusicCollection();
+        const sourceReference = doc(collectionReference, id);
+        const duplicateReference = doc(collectionReference);
+        await runTransaction(firestore!, async (transaction) => {
+          const source = await transaction.get(sourceReference);
+          if (!source.exists()) {
+            throw new MusicRepositoryError('A música não foi encontrada.', 'not-found');
+          }
+
+          const current = source.data() as MusicRecord;
+          const rest = { ...current } as Partial<MusicRecord> & Record<string, unknown>;
+          delete rest.createdAt;
+          delete rest.updatedAt;
+          transaction.set(duplicateReference, {
+            ...rest,
+            duplicadaDe: id,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        });
+        return duplicateReference.id;
+      } catch (error) {
+        throw wrapPersistenceError(error);
+      }
+    },
+
     async listMusics(): Promise<MusicRecord[]> {
       try {
         const result = await getDocs(query(userMusicCollection(), orderBy('titulo')));
@@ -205,6 +235,7 @@ export function createMusicRepository(
 const repository = createMusicRepository(db, () => auth?.currentUser?.uid ?? null);
 
 export const createMusic = repository.createMusic;
+export const duplicateMusic = repository.duplicateMusic;
 export const listMusics = repository.listMusics;
 export const getMusicById = repository.getMusicById;
 export const updateMusic = repository.updateMusic;
