@@ -9,6 +9,18 @@ service cloud.firestore {
       return data.keys().hasOnly(fields);
     }
 
+    function validDocumentId(value) {
+      return value is string
+        && value.size() > 0
+        && value.size() <= 1500
+        && value.matches('^[^/]+$');
+    }
+
+    function sameOptionalField(before, after, field) {
+      return (field in before) == (field in after)
+        && (!(field in before) || before[field] == after[field]);
+    }
+
     function validProfile(data) {
       return hasOnlyFields(data, ['nome', 'email', 'perfil', 'createdAt', 'updatedAt'])
         && data.keys().hasAll(['nome', 'email', 'perfil', 'createdAt', 'updatedAt'])
@@ -19,7 +31,7 @@ service cloud.firestore {
     }
 
     function validMusic(data) {
-      return hasOnlyFields(data, ['titulo', 'artista', 'compositor', 'tomOriginal', 'conteudoCifrado', 'observacoes', 'categorias', 'tags', 'momentosLiturgicos', 'estilo', 'origemTipo', 'driveFileId', 'arquivoNome', 'licencaOuPermissao', 'createdAt', 'updatedAt'])
+      return hasOnlyFields(data, ['titulo', 'artista', 'compositor', 'tomOriginal', 'conteudoCifrado', 'observacoes', 'categorias', 'tags', 'momentosLiturgicos', 'estilo', 'origemTipo', 'driveFileId', 'arquivoNome', 'licencaOuPermissao', 'duplicadaDe', 'createdAt', 'updatedAt'])
         && data.keys().hasAll(['titulo', 'artista', 'tomOriginal', 'conteudoCifrado', 'categorias', 'tags', 'momentosLiturgicos', 'estilo', 'origemTipo', 'driveFileId', 'arquivoNome', 'licencaOuPermissao', 'createdAt', 'updatedAt'])
         && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 200
         && (data.artista == null || (data.artista is string && data.artista.size() <= 200))
@@ -35,7 +47,30 @@ service cloud.firestore {
         && (data.driveFileId == null || (data.driveFileId is string && data.driveFileId.size() <= 500))
         && (data.arquivoNome == null || (data.arquivoNome is string && data.arquivoNome.size() <= 255))
         && (data.licencaOuPermissao == null || (data.licencaOuPermissao is string && data.licencaOuPermissao.size() <= 2000))
+        && (!('duplicadaDe' in data) || data.duplicadaDe == null || validDocumentId(data.duplicadaDe))
         && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function musicCopyMatchesSource(uid, data) {
+      let source = get(/databases/$(database)/documents/usuarios/$(uid)/musicas/$(data.duplicadaDe));
+      return source != null
+        && validMusic(source.data)
+        && data.diff(source.data).affectedKeys().hasOnly(['duplicadaDe', 'createdAt', 'updatedAt']);
+    }
+
+    function validMusicCreate(uid, data) {
+      return validMusic(data)
+        && (
+          !('duplicadaDe' in data)
+          || (
+            validDocumentId(data.duplicadaDe)
+            && musicCopyMatchesSource(uid, data)
+          )
+        );
+    }
+
+    function musicLineageIsImmutable(before, after) {
+      return sameOptionalField(before, after, 'duplicadaDe');
     }
 
     function validPlaylist(data) {
@@ -44,6 +79,329 @@ service cloud.firestore {
         && data.nome is string && data.nome.size() > 0 && data.nome.size() <= 120
         && data.tipo in ['manual', 'igreja', 'barzinho']
         && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function validChurchMomentV1(data, expectedId) {
+      return data.keys().hasOnly(['momentoId', 'musicaId', 'tomPersonalizado'])
+        && data.keys().hasAll(['momentoId', 'musicaId', 'tomPersonalizado'])
+        && data.momentoId == expectedId
+        && (data.musicaId == null || data.musicaId is string)
+        && (data.tomPersonalizado == null || (data.tomPersonalizado is string && data.tomPersonalizado.size() <= 12));
+    }
+
+    function validNewV1MusicId(value) {
+      return value is string
+        && value.size() > 0
+        && value.toUtf8().size() <= 1500
+        && value.matches('^[^/]+$');
+    }
+
+    function validNewChurchMomentReference(uid, moment) {
+      return moment.musicaId == null
+        || (
+          validNewV1MusicId(moment.musicaId)
+          && exists(/databases/$(database)/documents/usuarios/$(uid)/musicas/$(moment.musicaId))
+        );
+    }
+
+    function validNewChurchPlaylistReferences(uid, moments) {
+      return validNewChurchMomentReference(uid, moments[0])
+        && validNewChurchMomentReference(uid, moments[1])
+        && validNewChurchMomentReference(uid, moments[2])
+        && validNewChurchMomentReference(uid, moments[3])
+        && validNewChurchMomentReference(uid, moments[4])
+        && validNewChurchMomentReference(uid, moments[5])
+        && validNewChurchMomentReference(uid, moments[6])
+        && validNewChurchMomentReference(uid, moments[7])
+        && validNewChurchMomentReference(uid, moments[8])
+        && validNewChurchMomentReference(uid, moments[9]);
+    }
+
+    function validChurchMomentV2(data, expectedId) {
+      return data.keys().hasOnly(['momentoId', 'referenciaMusical', 'tomPersonalizado'])
+        && data.keys().hasAll(['momentoId', 'referenciaMusical', 'tomPersonalizado'])
+        && data.momentoId == expectedId
+        && (data.referenciaMusical == null || (
+          data.referenciaMusical is map
+          && data.referenciaMusical.keys().hasOnly(['musicaId'])
+          && data.referenciaMusical.musicaId is string
+          && data.referenciaMusical.musicaId.size() > 0
+        ))
+        && (data.tomPersonalizado == null || (data.tomPersonalizado is string && data.tomPersonalizado.size() <= 12));
+    }
+
+    function validChurchPlaylistV1Metadata(data) {
+      return hasOnlyFields(data, ['nome', 'tipo', 'createdAt', 'updatedAt', 'versaoEstrutura', 'momentosIgreja', 'copiadaDePlaylist'])
+        && data.keys().hasAll(['nome', 'tipo', 'createdAt', 'updatedAt', 'versaoEstrutura', 'momentosIgreja'])
+        && (!('copiadaDePlaylist' in data) || validDocumentId(data.copiadaDePlaylist))
+        && data.nome is string && data.nome.size() > 0 && data.nome.size() <= 120
+        && data.tipo == 'igreja'
+        && data.versaoEstrutura == 1
+        && data.createdAt is timestamp && data.updatedAt is timestamp
+        && data.momentosIgreja is list && data.momentosIgreja.size() == 10;
+    }
+
+    function validChurchPlaylistV1(data) {
+      return validChurchPlaylistV1Metadata(data)
+        && validChurchMomentV1(data.momentosIgreja[0], 'entrada')
+        && validChurchMomentV1(data.momentosIgreja[1], 'perdao')
+        && validChurchMomentV1(data.momentosIgreja[2], 'gloria')
+        && validChurchMomentV1(data.momentosIgreja[3], 'salmo')
+        && validChurchMomentV1(data.momentosIgreja[4], 'aclamacao')
+        && validChurchMomentV1(data.momentosIgreja[5], 'ofertorio')
+        && validChurchMomentV1(data.momentosIgreja[6], 'santo')
+        && validChurchMomentV1(data.momentosIgreja[7], 'comunhao')
+        && validChurchMomentV1(data.momentosIgreja[8], 'pos-comunhao')
+        && validChurchMomentV1(data.momentosIgreja[9], 'final');
+    }
+
+    function validChurchPlaylistV2Metadata(data) {
+      return hasOnlyFields(data, ['nome', 'tipo', 'createdAt', 'updatedAt', 'versaoEstrutura', 'momentosIgreja', 'copiadaDePlaylist'])
+        && data.keys().hasAll(['nome', 'tipo', 'createdAt', 'updatedAt', 'versaoEstrutura', 'momentosIgreja'])
+        && (!('copiadaDePlaylist' in data) || validDocumentId(data.copiadaDePlaylist))
+        && data.nome is string && data.nome.size() > 0 && data.nome.size() <= 120
+        && data.tipo == 'igreja'
+        && data.versaoEstrutura == 2
+        && data.createdAt is timestamp && data.updatedAt is timestamp
+        && data.momentosIgreja is list && data.momentosIgreja.size() == 10;
+    }
+
+    function validChurchPlaylistV2(data) {
+      return validChurchPlaylistV2Metadata(data)
+        && validChurchMomentV2(data.momentosIgreja[0], 'entrada')
+        && validChurchMomentV2(data.momentosIgreja[1], 'perdao')
+        && validChurchMomentV2(data.momentosIgreja[2], 'gloria')
+        && validChurchMomentV2(data.momentosIgreja[3], 'salmo')
+        && validChurchMomentV2(data.momentosIgreja[4], 'aclamacao')
+        && validChurchMomentV2(data.momentosIgreja[5], 'ofertorio')
+        && validChurchMomentV2(data.momentosIgreja[6], 'santo')
+        && validChurchMomentV2(data.momentosIgreja[7], 'comunhao')
+        && validChurchMomentV2(data.momentosIgreja[8], 'pos-comunhao')
+        && validChurchMomentV2(data.momentosIgreja[9], 'final');
+    }
+
+    function sameChurchMomentV1(sourceMoments, copyMoments, index) {
+      let source = sourceMoments[index];
+      let copy = copyMoments[index];
+      return copy.keys().size() == 3
+        && source.momentoId == copy.momentoId
+        && source.musicaId == copy.musicaId
+        && source.tomPersonalizado == copy.tomPersonalizado;
+    }
+
+    function sameChurchMomentV1Copy(sourceMoments, copyMoments, index, expectedId) {
+      let source = sourceMoments[index];
+      let copy = copyMoments[index];
+      return copy.keys().size() == 3
+        && source.keys() == copy.keys()
+        && source.momentoId == expectedId
+        && copy.momentoId == expectedId
+        && source.momentoId == copy.momentoId
+        && (copy.musicaId == null || copy.musicaId is string)
+        && source.musicaId == copy.musicaId
+        && (copy.tomPersonalizado == null
+          || (copy.tomPersonalizado is string && copy.tomPersonalizado.size() <= 12))
+        && source.tomPersonalizado == copy.tomPersonalizado;
+    }
+
+    function sameChurchMomentV2(sourceMoments, copyMoments, index) {
+      let source = sourceMoments[index];
+      let copy = copyMoments[index];
+      return source.keys() == copy.keys()
+        && source.momentoId == copy.momentoId
+        && source.referenciaMusical == copy.referenciaMusical
+        && source.tomPersonalizado == copy.tomPersonalizado;
+    }
+
+    function sameChurchMomentsV1(sourceMoments, copyMoments) {
+      return sameChurchMomentV1Copy(sourceMoments, copyMoments, 0, 'entrada')
+        && sameChurchMomentV1Copy(sourceMoments, copyMoments, 1, 'perdao')
+        && sameChurchMomentV1Copy(sourceMoments, copyMoments, 2, 'gloria')
+        && sameChurchMomentV1Copy(sourceMoments, copyMoments, 3, 'salmo')
+        && sameChurchMomentV1Copy(sourceMoments, copyMoments, 4, 'aclamacao')
+        && sameChurchMomentV1Copy(sourceMoments, copyMoments, 5, 'ofertorio')
+        && sameChurchMomentV1Copy(sourceMoments, copyMoments, 6, 'santo')
+        && sameChurchMomentV1Copy(sourceMoments, copyMoments, 7, 'comunhao')
+        && sameChurchMomentV1Copy(sourceMoments, copyMoments, 8, 'pos-comunhao')
+        && sameChurchMomentV1Copy(sourceMoments, copyMoments, 9, 'final');
+    }
+
+    function sameChurchMomentsV2(sourceMoments, copyMoments) {
+      return sameChurchMomentV2(sourceMoments, copyMoments, 0)
+        && sameChurchMomentV2(sourceMoments, copyMoments, 1)
+        && sameChurchMomentV2(sourceMoments, copyMoments, 2)
+        && sameChurchMomentV2(sourceMoments, copyMoments, 3)
+        && sameChurchMomentV2(sourceMoments, copyMoments, 4)
+        && sameChurchMomentV2(sourceMoments, copyMoments, 5)
+        && sameChurchMomentV2(sourceMoments, copyMoments, 6)
+        && sameChurchMomentV2(sourceMoments, copyMoments, 7)
+        && sameChurchMomentV2(sourceMoments, copyMoments, 8)
+        && sameChurchMomentV2(sourceMoments, copyMoments, 9);
+    }
+
+    function sameChurchPlaylistMoments(sourceData, copyData) {
+      let sourceMoments = sourceData.momentosIgreja;
+      let copyMoments = copyData.momentosIgreja;
+      return sourceMoments is list && sourceMoments.size() == 10
+        && copyMoments is list && copyMoments.size() == 10
+        && (copyData.versaoEstrutura == 1
+          ? sameChurchMomentsV1(sourceMoments, copyMoments)
+          : sameChurchMomentsV2(sourceMoments, copyMoments));
+    }
+
+    function churchPlaylistCopyMatchesSource(uid, data) {
+      let source = get(/databases/$(database)/documents/usuarios/$(uid)/playlists/$(data.copiadaDePlaylist));
+      return source != null
+        && source.data.tipo == data.tipo
+        && source.data.versaoEstrutura == data.versaoEstrutura
+        && sameChurchPlaylistMoments(source.data, data);
+    }
+
+    function churchPlaylistV1CopyMatchesSource(uid, data) {
+      let source = get(/databases/$(database)/documents/usuarios/$(uid)/playlists/$(data.copiadaDePlaylist));
+      return source != null
+        && source.data.tipo == 'igreja'
+        && source.data.versaoEstrutura == 1
+        && source.data.momentosIgreja is list
+        && source.data.momentosIgreja.size() == 10
+        && sameChurchMomentsV1(source.data.momentosIgreja, data.momentosIgreja);
+    }
+
+    function validChurchPlaylistV1Copy(uid, data) {
+      return hasOnlyFields(data, ['nome', 'tipo', 'createdAt', 'updatedAt', 'versaoEstrutura', 'momentosIgreja', 'copiadaDePlaylist'])
+        && data.keys().hasAll(['nome', 'tipo', 'createdAt', 'updatedAt', 'versaoEstrutura', 'momentosIgreja', 'copiadaDePlaylist'])
+        && validDocumentId(data.copiadaDePlaylist)
+        && data.nome is string && data.nome.size() > 0 && data.nome.size() <= 120
+        && data.tipo == 'igreja'
+        && data.versaoEstrutura == 1
+        && data.createdAt is timestamp && data.updatedAt is timestamp
+        && data.momentosIgreja is list && data.momentosIgreja.size() == 10
+        && churchPlaylistV1CopyMatchesSource(uid, data);
+    }
+
+    function validChurchPlaylistV1Create(uid, data) {
+      return false;
+    }
+
+    function validChurchPlaylistCopy(uid, data) {
+      return hasOnlyFields(data, ['nome', 'tipo', 'createdAt', 'updatedAt', 'versaoEstrutura', 'momentosIgreja', 'copiadaDePlaylist'])
+        && data.keys().hasAll(['nome', 'tipo', 'createdAt', 'updatedAt', 'versaoEstrutura', 'momentosIgreja', 'copiadaDePlaylist'])
+        && data.nome is string && data.nome.size() > 0 && data.nome.size() <= 120
+        && data.tipo == 'igreja'
+        && data.versaoEstrutura in [1, 2]
+        && data.createdAt is timestamp && data.updatedAt is timestamp
+        && data.momentosIgreja is list && data.momentosIgreja.size() == 10
+        && validDocumentId(data.copiadaDePlaylist)
+        && churchPlaylistCopyMatchesSource(uid, data);
+    }
+
+    function validPlaylistCreate(uid, data) {
+      return 'versaoEstrutura' in data
+        ? (
+          data.versaoEstrutura == 1
+            ? ('copiadaDePlaylist' in data
+              ? validChurchPlaylistV1Copy(uid, data)
+              : validChurchPlaylistV1Create(uid, data))
+            : data.versaoEstrutura == 2
+              ? (
+                'copiadaDePlaylist' in data
+                  ? validChurchPlaylistCopy(uid, data)
+                  : validChurchPlaylistV2(data)
+              )
+              : false
+        )
+        : validPlaylist(data);
+    }
+
+    function changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, index, expectedId) {
+      let beforeMoment = beforeMoments[index];
+      let afterMoment = afterMoments[index];
+      return sameChurchMomentV1(beforeMoments, afterMoments, index)
+        ? 0
+        : (
+          validChurchMomentV1(afterMoment, expectedId)
+          && (
+            afterMoment.musicaId == beforeMoment.musicaId
+            || afterMoment.musicaId == null
+            || (
+              validNewV1MusicId(afterMoment.musicaId)
+              && exists(/databases/$(database)/documents/usuarios/$(uid)/musicas/$(afterMoment.musicaId))
+            )
+          )
+          ? 1
+          : 2
+        );
+    }
+
+    function totalChangedChurchMomentStatusV1(uid, beforeMoments, afterMoments) {
+      return changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, 0, 'entrada')
+        + changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, 1, 'perdao')
+        + changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, 2, 'gloria')
+        + changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, 3, 'salmo')
+        + changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, 4, 'aclamacao')
+        + changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, 5, 'ofertorio')
+        + changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, 6, 'santo')
+        + changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, 7, 'comunhao')
+        + changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, 8, 'pos-comunhao')
+        + changedChurchMomentStatusV1(uid, beforeMoments, afterMoments, 9, 'final');
+    }
+
+    function validChangedChurchMomentReferenceV2(uid, beforeMoment, afterMoment) {
+      return afterMoment.referenciaMusical == beforeMoment.referenciaMusical
+        || afterMoment.referenciaMusical == null
+        || (
+          validDocumentId(afterMoment.referenciaMusical.musicaId)
+          && exists(/databases/$(database)/documents/usuarios/$(uid)/musicas/$(afterMoment.referenciaMusical.musicaId))
+        );
+    }
+
+    function changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, index, expectedId) {
+      let beforeMoment = beforeMoments[index];
+      let afterMoment = afterMoments[index];
+      return sameChurchMomentV2(beforeMoments, afterMoments, index)
+        ? 0
+        : (
+          validChurchMomentV2(afterMoment, expectedId)
+          && validChangedChurchMomentReferenceV2(uid, beforeMoment, afterMoment)
+          ? 1
+          : 2
+        );
+    }
+
+    function totalChangedChurchMomentStatusV2(uid, beforeMoments, afterMoments) {
+      return changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, 0, 'entrada')
+        + changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, 1, 'perdao')
+        + changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, 2, 'gloria')
+        + changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, 3, 'salmo')
+        + changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, 4, 'aclamacao')
+        + changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, 5, 'ofertorio')
+        + changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, 6, 'santo')
+        + changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, 7, 'comunhao')
+        + changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, 8, 'pos-comunhao')
+        + changedChurchMomentStatusV2(uid, beforeMoments, afterMoments, 9, 'final');
+    }
+
+    function validChurchPlaylistV1Update(uid, before, after) {
+      return validChurchPlaylistV1Metadata(before)
+        && validChurchPlaylistV1Metadata(after)
+        && totalChangedChurchMomentStatusV1(uid, before.momentosIgreja, after.momentosIgreja) <= 1;
+    }
+
+    function validChurchPlaylistUpdate(uid, before, after) {
+      return sameOptionalField(before, after, 'copiadaDePlaylist')
+        && (
+          !('versaoEstrutura' in before)
+            ? validPlaylist(after)
+            : (
+              before.versaoEstrutura == after.versaoEstrutura
+              && (
+                before.versaoEstrutura == 1
+                  ? validChurchPlaylistV1Update(uid, before, after)
+                  : validChurchPlaylistV2Metadata(after)
+                    && totalChangedChurchMomentStatusV2(uid, before.momentosIgreja, after.momentosIgreja) <= 1
+              )
+            )
+        );
     }
 
     function validPlaylistItem(data) {
@@ -94,11 +452,14 @@ service cloud.firestore {
       match /musicas/{musicaId} {
         allow get, list: if isOwner(uid);
         allow create: if isOwner(uid)
-          && validMusic(request.resource.data)
+          && resource == null
+          && validMusicCreate(uid, request.resource.data)
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time;
         allow update: if isOwner(uid)
+          && resource != null
           && validMusic(request.resource.data)
+          && musicLineageIsImmutable(resource.data, request.resource.data)
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.updatedAt == request.time;
         allow delete: if isOwner(uid);
@@ -107,11 +468,13 @@ service cloud.firestore {
       match /playlists/{playlistId} {
         allow get, list: if isOwner(uid);
         allow create: if isOwner(uid)
-          && validPlaylist(request.resource.data)
+          && resource == null
+          && validPlaylistCreate(uid, request.resource.data)
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time;
         allow update: if isOwner(uid)
-          && validPlaylist(request.resource.data)
+          && resource != null
+          && validChurchPlaylistUpdate(uid, resource.data, request.resource.data)
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.updatedAt == request.time;
         allow delete: if isOwner(uid);

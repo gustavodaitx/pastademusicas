@@ -6,12 +6,16 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { Timestamp, collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { Timestamp, collection, deleteDoc, deleteField, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createMusicRepository, MusicRepositoryError } from '../services/musicRepository';
 import type { MusicInput } from '../services/musicRepository';
-import { createPlaylistRepository, PlaylistRepositoryError } from '../services/playlistRepository';
+import {
+  createEmptyChurchMoments,
+  createPlaylistRepository,
+  PlaylistRepositoryError,
+} from '../services/playlistRepository';
 import type { PlaylistInput } from '../services/playlistRepository';
 import { createRepertoireRepository, RepertoireRepositoryError } from '../services/repertoireRepository';
 import type { RepertoireInput } from '../services/repertoireRepository';
@@ -25,7 +29,7 @@ const [host, rawPort] = emulatorHost.split(':');
 const timestamp = Timestamp.fromDate(new Date('2026-01-01T00:00:00Z'));
 let testEnvironment: RulesTestEnvironment;
 
-const withCurrentTimestamps = <T extends { createdAt: unknown; updatedAt: unknown }>(data: T) => ({
+const withCurrentTimestamps = <T extends object>(data: T) => ({
   ...data,
   createdAt: serverTimestamp(),
   updatedAt: serverTimestamp(),
@@ -70,6 +74,14 @@ const playlistsFor = (uid: string | null) => createPlaylistRepository(
   (uid ? testEnvironment.authenticatedContext(uid) : testEnvironment.unauthenticatedContext()).firestore() as unknown as Firestore,
   () => uid,
 );
+
+const withRulesDisabledPlaylistRepository = (
+  uid: string,
+  operation: (repository: ReturnType<typeof createPlaylistRepository>, firestore: Firestore) => Promise<void>,
+) => testEnvironment.withSecurityRulesDisabled(async (context) => {
+  const firestore = context.firestore() as unknown as Firestore;
+  return operation(createPlaylistRepository(firestore, () => uid), firestore);
+});
 
 const repertoiresFor = (uid: string | null) => createRepertoireRepository(
   (uid ? testEnvironment.authenticatedContext(uid) : testEnvironment.unauthenticatedContext()).firestore() as unknown as Firestore,
@@ -124,7 +136,7 @@ beforeAll(async () => {
       rules: readFileSync(resolve(process.cwd(), 'firestore.rules'), 'utf8'),
     },
   });
-});
+}, 30_000);
 
 afterEach(async () => {
   await testEnvironment.clearFirestore();
@@ -240,6 +252,63 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
     await assertFails(updateDoc(musicRef, { createdAt: Timestamp.now() }));
     await assertFails(updateDoc(musicRef, { updatedAt: Timestamp.now() }));
     await assertSucceeds(updateDoc(musicRef, { titulo: 'Título atualizado', updatedAt: serverTimestamp() }));
+  });
+
+  it('validates music duplication lineage on creation and keeps it immutable afterwards', async () => {
+    const owner = repositoryFor('music-lineage-owner');
+    const otherOwner = repositoryFor('music-lineage-other');
+    const sourceId = await owner.createMusic({ ...musicInput, titulo: 'Origem' });
+    const duplicateId = await owner.duplicateMusic(sourceId);
+    const duplicate = await owner.getMusicById(duplicateId);
+    expect(duplicate).toMatchObject({ duplicadaDe: sourceId, titulo: 'Origem' });
+
+    await owner.updateMusic(duplicateId, { ...musicInput, titulo: 'Cópia independente' });
+    expect(await owner.getMusicById(duplicateId)).toMatchObject({
+      duplicadaDe: sourceId,
+      titulo: 'Cópia independente',
+    });
+    expect((await owner.getMusicById(sourceId))?.titulo).toBe('Origem');
+
+    const foreignSourceId = await otherOwner.createMusic(musicInput);
+    const ownerDb = testEnvironment.authenticatedContext('music-lineage-owner').firestore();
+    const forgedMissingRef = doc(ownerDb, 'usuarios/music-lineage-owner/musicas/forged-missing');
+    await assertFails(setDoc(forgedMissingRef, withCurrentTimestamps({
+      ...music,
+      duplicadaDe: 'missing-source',
+    })));
+    const forgedForeignRef = doc(ownerDb, 'usuarios/music-lineage-owner/musicas/forged-foreign');
+    await assertFails(setDoc(forgedForeignRef, withCurrentTimestamps({
+      ...music,
+      duplicadaDe: foreignSourceId,
+    })));
+    const forgedContentRef = doc(ownerDb, 'usuarios/music-lineage-owner/musicas/forged-content');
+    await assertFails(setDoc(forgedContentRef, withCurrentTimestamps({
+      ...music,
+      titulo: 'Conteúdo diferente',
+      duplicadaDe: sourceId,
+    })));
+
+    const originalRef = doc(ownerDb, `usuarios/music-lineage-owner/musicas/${sourceId}`);
+    await assertFails(updateDoc(originalRef, {
+      duplicadaDe: sourceId,
+      updatedAt: serverTimestamp(),
+    }));
+    const duplicateRef = doc(ownerDb, `usuarios/music-lineage-owner/musicas/${duplicateId}`);
+    await assertFails(updateDoc(duplicateRef, {
+      duplicadaDe: foreignSourceId,
+      updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(duplicateRef, {
+      duplicadaDe: deleteField(),
+      updatedAt: serverTimestamp(),
+    }));
+
+    await owner.deleteMusic(sourceId);
+    await owner.updateMusic(duplicateId, { ...musicInput, titulo: 'Ainda independente' });
+    expect(await owner.getMusicById(duplicateId)).toMatchObject({
+      duplicadaDe: sourceId,
+      titulo: 'Ainda independente',
+    });
   });
 
   it('playlist rules require an existing playlist and a same-user music reference keyed by music ID', async () => {
@@ -699,6 +768,521 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
     await expect(repository.updatePlaylist(playlistId, { nome: '   ', tipo: 'igreja' }))
       .rejects.toMatchObject({ code: 'validation/required' });
     expect((await repository.getPlaylistById(playlistId))?.nome).toBe(playlistInput.nome);
+  });
+
+  it('church playlist repository persists the fixed moments and updates only the selected slot', async () => {
+    await withRulesDisabledPlaylistRepository('church-owner', async (playlists, firestore) => {
+      const songs = createMusicRepository(firestore, () => 'church-owner');
+      const songId = await songs.createMusic(musicInput);
+      const moments = createEmptyChurchMoments();
+      const missingSongMoments = createEmptyChurchMoments();
+      missingSongMoments[0] = { ...missingSongMoments[0], referenciaMusical: { musicaId: 'missing-song' } };
+      await expect(playlists.createChurchPlaylistV2({ nome: 'Inválida', momentosIgreja: missingSongMoments }))
+        .rejects.toMatchObject({ code: 'invalid-music-reference' });
+
+      const playlistId = await playlists.createChurchPlaylistV2({ nome: 'Celebração', momentosIgreja: moments });
+
+      const initial = await playlists.getChurchPlaylist(playlistId);
+      expect(initial?.kind).toBe('structured');
+      if (initial?.kind !== 'structured') throw new Error('Expected a structured church playlist.');
+      expect(initial.playlist.momentosIgreja).toEqual(moments);
+      expect(initial.playlist.versaoEstrutura).toBe(2);
+
+      const inputWithPaddedKey = createEmptyChurchMoments();
+      inputWithPaddedKey[0] = { ...inputWithPaddedKey[0], tomPersonalizado: ' D ' };
+      const normalizedId = await playlists.createChurchPlaylistV2({
+        nome: 'Tom normalizado',
+        momentosIgreja: inputWithPaddedKey,
+      });
+      const normalizedPlaylist = await playlists.getChurchPlaylist(normalizedId);
+      if (normalizedPlaylist?.kind !== 'structured') throw new Error('Expected a structured church playlist.');
+      expect(normalizedPlaylist.playlist.momentosIgreja[0].tomPersonalizado).toBe('D');
+
+      const legacyInputMoments = createEmptyChurchMoments(1);
+      legacyInputMoments[0] = { ...legacyInputMoments[0], musicaId: songId };
+      const normalizedVersionId = await playlists.createChurchPlaylist({
+        nome: 'Entrada legada convertida',
+        momentosIgreja: legacyInputMoments,
+      });
+      const normalizedVersionPlaylist = await playlists.getChurchPlaylist(normalizedVersionId);
+      if (normalizedVersionPlaylist?.kind !== 'structured') throw new Error('Expected a structured church playlist.');
+      expect(normalizedVersionPlaylist.playlist.versaoEstrutura).toBe(2);
+      expect(normalizedVersionPlaylist.playlist.momentosIgreja[0]).toMatchObject({
+        referenciaMusical: { musicaId: songId },
+      });
+
+      await playlists.updateChurchMoment(playlistId, 'entrada', {
+        versaoEstrutura: 2,
+        referenciaMusical: { musicaId: songId },
+        tomPersonalizado: 'D',
+      });
+      await playlists.updateChurchMoment(playlistId, 'perdao', { versaoEstrutura: 2, referenciaMusical: null });
+      await expect(playlists.updateChurchMoment(playlistId, 'gloria', { versaoEstrutura: 2, referenciaMusical: { musicaId: 'missing-song' } }))
+        .rejects.toMatchObject({ code: 'invalid-music-reference' });
+
+      const updated = await playlists.getChurchPlaylist(playlistId);
+      if (updated?.kind !== 'structured') throw new Error('Expected a structured church playlist.');
+      expect(updated.playlist.momentosIgreja[0]).toMatchObject({ referenciaMusical: { musicaId: songId }, tomPersonalizado: 'D' });
+      expect(updated.playlist.momentosIgreja[1]).toMatchObject({ referenciaMusical: null, tomPersonalizado: null });
+      expect(updated.playlist.momentosIgreja.slice(2)).toEqual(moments.slice(2));
+    });
+  });
+
+  it('church playlist repository preserves concurrent updates to different moments', async () => {
+    await withRulesDisabledPlaylistRepository('church-owner', async (playlists) => {
+      const playlistId = await playlists.createChurchPlaylist({
+        nome: 'Celebração concorrente',
+        momentosIgreja: createEmptyChurchMoments(1),
+      });
+
+      await Promise.all([
+        playlists.updateChurchMoment(playlistId, 'entrada', { versaoEstrutura: 2, tomPersonalizado: 'D' }),
+        playlists.updateChurchMoment(playlistId, 'perdao', { versaoEstrutura: 2, tomPersonalizado: 'G' }),
+      ]);
+
+      const result = await playlists.getChurchPlaylist(playlistId);
+      if (result?.kind !== 'structured') throw new Error('Expected a structured church playlist.');
+      expect(result.playlist.momentosIgreja[0].tomPersonalizado).toBe('D');
+      expect(result.playlist.momentosIgreja[1].tomPersonalizado).toBe('G');
+    });
+  });
+
+  it('v2 rules allow one changed moment, reject multiple changed moments and preserve unchanged orphan references', async () => {
+    const uid = 'church-v2-single-moment-owner';
+    const repository = playlistsFor(uid);
+    const playlistId = await repository.createChurchPlaylistV2({
+      nome: 'Igreja v2',
+      momentosIgreja: createEmptyChurchMoments(),
+    });
+    const ownerDb = testEnvironment.authenticatedContext(uid).firestore();
+    const playlistRef = doc(ownerDb, `usuarios/${uid}/playlists/${playlistId}`);
+    const oneChanged = createEmptyChurchMoments();
+    oneChanged[0] = { ...oneChanged[0], tomPersonalizado: 'D' };
+
+    await assertSucceeds(updateDoc(playlistRef, {
+      momentosIgreja: oneChanged,
+      updatedAt: serverTimestamp(),
+    }));
+
+    const twoChanged = createEmptyChurchMoments();
+    twoChanged[0] = { ...twoChanged[0], tomPersonalizado: 'E' };
+    twoChanged[1] = { ...twoChanged[1], tomPersonalizado: 'G' };
+    await assertFails(updateDoc(playlistRef, {
+      momentosIgreja: twoChanged,
+      updatedAt: serverTimestamp(),
+    }));
+
+    const threeChanged = createEmptyChurchMoments();
+    threeChanged[0] = { ...threeChanged[0], tomPersonalizado: 'E' };
+    threeChanged[1] = { ...threeChanged[1], tomPersonalizado: 'G' };
+    threeChanged[2] = { ...threeChanged[2], tomPersonalizado: 'A' };
+    await assertFails(updateDoc(playlistRef, {
+      momentosIgreja: threeChanged,
+      updatedAt: serverTimestamp(),
+    }));
+
+    await assertSucceeds(updateDoc(playlistRef, {
+      nome: 'Nome v2 atualizado',
+      updatedAt: serverTimestamp(),
+    }));
+
+    const orphanMoments = createEmptyChurchMoments();
+    orphanMoments[0] = { ...orphanMoments[0], referenciaMusical: { musicaId: 'orphan-history-id' } };
+    const orphanPlaylistId = 'orphan-reference-history';
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `usuarios/${uid}/playlists/${orphanPlaylistId}`), withCurrentTimestamps({
+        nome: 'Igreja com referência histórica',
+        tipo: 'igreja',
+        versaoEstrutura: 2,
+        momentosIgreja: orphanMoments,
+      }));
+    });
+    const orphanRef = doc(ownerDb, `usuarios/${uid}/playlists/${orphanPlaylistId}`);
+    const editOtherMoment = orphanMoments.map((moment, index) => index === 9
+      ? { ...moment, tomPersonalizado: 'E' }
+      : moment);
+    await assertSucceeds(updateDoc(orphanRef, {
+      momentosIgreja: editOtherMoment,
+      updatedAt: serverTimestamp(),
+    }));
+
+    const changedOrphan = editOtherMoment.map((moment, index) => index === 0
+      ? { ...moment, referenciaMusical: { musicaId: 'new-missing-song' } }
+      : moment);
+    await assertFails(updateDoc(orphanRef, {
+      momentosIgreja: changedOrphan,
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  it('church playlist reads reject partially structured documents without migrating them', async () => {
+    await withRulesDisabledPlaylistRepository('church-owner', async (playlists, firestore) => {
+      const timestamp = Timestamp.fromMillis(1);
+      const documents = [
+        {
+          id: 'partial-church-playlist',
+          data: {
+            nome: 'Estrutura parcial',
+            tipo: 'igreja',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            versaoEstrutura: 1,
+          },
+        },
+        {
+          id: 'mismatched-church-playlist',
+          data: {
+            nome: 'Tipo incompatível',
+            tipo: 'manual',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            versaoEstrutura: 1,
+            momentosIgreja: createEmptyChurchMoments(1),
+          },
+        },
+      ];
+
+      for (const { id, data } of documents) {
+        const reference = doc(firestore, `usuarios/church-owner/playlists/${id}`);
+        await setDoc(reference, data);
+        await expect(playlists.getChurchPlaylist(id))
+          .rejects.toMatchObject({ code: 'invalid-playlist-format' });
+        expect((await getDoc(reference)).data()).toEqual(data);
+      }
+    });
+  });
+
+  it('church playlist duplication preserves orphan IDs and allows independent corrections', async () => {
+    await withRulesDisabledPlaylistRepository('church-owner', async (playlists, firestore) => {
+      const songs = createMusicRepository(firestore, () => 'church-owner');
+      const songId = await songs.createMusic(musicInput);
+      const moments = createEmptyChurchMoments();
+      moments[0] = { ...moments[0], referenciaMusical: { musicaId: songId }, tomPersonalizado: 'G' };
+      const sourceId = await playlists.createChurchPlaylistV2({ nome: 'Celebração', momentosIgreja: moments });
+
+      await songs.deleteMusic(songId);
+      const duplicateId = await playlists.duplicatePlaylist(sourceId);
+      const source = await playlists.getChurchPlaylist(sourceId);
+      const duplicate = await playlists.getChurchPlaylist(duplicateId);
+
+      expect(duplicateId).not.toBe(sourceId);
+      expect(source?.kind).toBe('structured');
+      expect(duplicate?.kind).toBe('structured');
+      if (source?.kind !== 'structured' || duplicate?.kind !== 'structured') {
+        throw new Error('Expected structured church playlists.');
+      }
+      expect(duplicate.playlist).toMatchObject({
+        nome: 'Celebração (cópia)',
+        versaoEstrutura: 2,
+        momentosIgreja: moments,
+      });
+      expect(duplicate.playlist.createdAt.isEqual(source.playlist.createdAt)).toBe(false);
+      expect(duplicate.playlist.updatedAt.isEqual(source.playlist.updatedAt)).toBe(false);
+
+      await playlists.updateChurchMoment(duplicateId, 'entrada', { versaoEstrutura: 2, referenciaMusical: null, tomPersonalizado: null });
+      const correctedDuplicate = await playlists.getChurchPlaylist(duplicateId);
+      const unchangedSource = await playlists.getChurchPlaylist(sourceId);
+      if (correctedDuplicate?.kind !== 'structured' || unchangedSource?.kind !== 'structured') {
+        throw new Error('Expected structured church playlists.');
+      }
+      expect(correctedDuplicate.playlist.momentosIgreja[0]).toMatchObject({ referenciaMusical: null, tomPersonalizado: null });
+      expect(unchangedSource.playlist.momentosIgreja[0]).toMatchObject({ referenciaMusical: { musicaId: songId }, tomPersonalizado: 'G' });
+    });
+  });
+
+  it('church-specific operations preserve legacy playlists and generic item operations reject structured playlists', async () => {
+    await withRulesDisabledPlaylistRepository('church-owner', async (playlists, firestore) => {
+      const songs = createMusicRepository(firestore, () => 'church-owner');
+      const legacyId = await playlists.createPlaylist({ nome: 'Igreja legada', tipo: 'igreja' });
+      const songId = await songs.createMusic(musicInput);
+      await playlists.addMusicToPlaylist(legacyId, songId);
+
+      const legacyDuplicateId = await playlists.duplicatePlaylist(legacyId);
+      const legacyDuplicate = await playlists.getPlaylistById(legacyDuplicateId);
+      expect(legacyDuplicate?.tipo).toBe('igreja');
+      expect(legacyDuplicate?.itens).toMatchObject([{ musicaId: songId }]);
+      expect(legacyDuplicate).not.toHaveProperty('versaoEstrutura');
+      const legacyRead = await playlists.getChurchPlaylist(legacyId);
+      expect(legacyRead?.kind).toBe('legacy');
+      if (legacyRead?.kind !== 'legacy') throw new Error('Expected a legacy church playlist.');
+      expect(legacyRead.playlist.itens).toMatchObject([{ musicaId: songId }]);
+
+      const churchId = await playlists.createChurchPlaylistV2({
+        nome: 'Igreja estruturada',
+        momentosIgreja: createEmptyChurchMoments(),
+      });
+      await expect(playlists.getPlaylistById(churchId)).rejects.toMatchObject({ code: 'structured-playlist' });
+      await expect(playlists.addMusicToPlaylist(churchId, songId)).rejects.toMatchObject({ code: 'structured-playlist' });
+      await expect(playlists.removeMusicFromPlaylist(churchId, songId)).rejects.toMatchObject({ code: 'structured-playlist' });
+      await expect(playlists.reorderPlaylistItems(churchId, [])).rejects.toMatchObject({ code: 'structured-playlist' });
+      await expect(playlists.updatePlaylistItemKey(churchId, songId, 'D')).rejects.toMatchObject({ code: 'structured-playlist' });
+      await expect(playlists.updatePlaylist(churchId, { nome: 'Outro nome', tipo: 'manual' }))
+        .rejects.toMatchObject({ code: 'validation/structured-playlist-type' });
+
+      await playlists.updatePlaylist(churchId, { nome: 'Nome atualizado', tipo: 'igreja' });
+      const renamed = await playlists.getChurchPlaylist(churchId);
+      expect(renamed).toMatchObject({
+        kind: 'structured',
+        playlist: { nome: 'Nome atualizado', momentosIgreja: createEmptyChurchMoments() },
+      });
+      await playlists.deleteChurchPlaylist(churchId);
+      expect(await playlists.getChurchPlaylist(churchId)).toBeNull();
+    });
+  });
+
+  it('deleting a structured church playlist also removes old playlist items', async () => {
+    await withRulesDisabledPlaylistRepository('church-owner', async (playlists, firestore) => {
+      const playlistId = await playlists.createChurchPlaylistV2({
+        nome: 'Igreja com itens antigos',
+        momentosIgreja: createEmptyChurchMoments(),
+      });
+      const oldItemRef = doc(firestore, `usuarios/church-owner/playlists/${playlistId}/itens/old-song`);
+      await setDoc(oldItemRef, {
+        musicaId: 'old-song',
+        posicao: 1,
+        momento: null,
+        tomPersonalizado: null,
+      });
+
+      await playlists.deleteChurchPlaylist(playlistId);
+
+      expect((await getDoc(oldItemRef)).exists()).toBe(false);
+      expect(await playlists.getChurchPlaylist(playlistId)).toBeNull();
+    });
+  });
+
+  it('limits generic deletion to flat playlists and keeps church deletion explicit', async () => {
+    const uid = 'church-delete-owner';
+    const playlists = playlistsFor(uid);
+    const flatId = await playlists.createPlaylist({ nome: 'Playlist plana', tipo: 'manual' });
+    await playlists.deletePlaylist(flatId);
+    expect(await playlists.getPlaylistById(flatId)).toBeNull();
+
+    const v1Id = 'structured-v1';
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `usuarios/${uid}/playlists/${v1Id}`), withCurrentTimestamps({
+        nome: 'Igreja v1',
+        tipo: 'igreja',
+        versaoEstrutura: 1,
+        momentosIgreja: createEmptyChurchMoments(1),
+      }));
+    });
+    const v2Id = await playlists.createChurchPlaylistV2({
+      nome: 'Igreja v2',
+      momentosIgreja: createEmptyChurchMoments(),
+    });
+
+    await expect(playlists.deletePlaylist(v1Id)).rejects.toMatchObject({ code: 'structured-playlist' });
+    await expect(playlists.deletePlaylist(v2Id)).rejects.toMatchObject({ code: 'structured-playlist' });
+    expect((await playlists.getChurchPlaylist(v1Id))?.kind).toBe('structured');
+    expect((await playlists.getChurchPlaylist(v2Id))?.kind).toBe('structured');
+
+    await playlists.deleteChurchPlaylist(v2Id);
+    expect(await playlists.getChurchPlaylist(v2Id)).toBeNull();
+  });
+
+  it('creates structured playlists as v2 and preserves v1 when reading, editing and copying', async () => {
+    const secured = playlistsFor('church-version-owner');
+    let legacySourceId = '';
+    let orphanV2SourceId = '';
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      const v1Moments = createEmptyChurchMoments(1);
+      v1Moments[0] = { ...v1Moments[0], musicaId: 'legacy-orphan' };
+      v1Moments[1] = { ...v1Moments[1], musicaId: 'legacy/orphan' };
+      v1Moments[2] = { ...v1Moments[2], musicaId: `legacy-${'x'.repeat(1600)}` };
+      legacySourceId = 'legacy-v1';
+      await setDoc(doc(db, `usuarios/church-version-owner/playlists/${legacySourceId}`), withCurrentTimestamps({
+        nome: 'Igreja v1 antiga',
+        tipo: 'igreja',
+        versaoEstrutura: 1,
+        momentosIgreja: v1Moments,
+      }));
+
+      const v2Moments = createEmptyChurchMoments(2);
+      v2Moments[0] = { ...v2Moments[0], referenciaMusical: { musicaId: 'orphan-v2' } };
+      orphanV2SourceId = 'orphan-v2-source';
+      await setDoc(doc(db, `usuarios/church-version-owner/playlists/${orphanV2SourceId}`), withCurrentTimestamps({
+        nome: 'Igreja v2 com órfão',
+        tipo: 'igreja',
+        versaoEstrutura: 2,
+        momentosIgreja: v2Moments,
+      }));
+    });
+
+    const newPlaylistId = await secured.createChurchPlaylistV2({
+      nome: 'Nova Igreja',
+      momentosIgreja: createEmptyChurchMoments(),
+    });
+    const newPlaylist = await secured.getChurchPlaylist(newPlaylistId);
+    expect(newPlaylist).toMatchObject({ kind: 'structured', playlist: { versaoEstrutura: 2 } });
+
+    const ownerDb = testEnvironment.authenticatedContext('church-version-owner').firestore();
+    await assertFails(setDoc(doc(ownerDb, 'usuarios/church-version-owner/playlists/new-v1'), withCurrentTimestamps({
+      nome: 'Nova v1 proibida',
+      tipo: 'igreja',
+      versaoEstrutura: 1,
+      momentosIgreja: createEmptyChurchMoments(1),
+    })));
+
+    const legacyRead = await secured.getChurchPlaylist(legacySourceId);
+    expect(legacyRead?.kind).toBe('structured');
+    if (legacyRead?.kind !== 'structured') throw new Error('Expected the existing v1 playlist to remain readable.');
+    expect(legacyRead.playlist.versaoEstrutura).toBe(1);
+    const legacyCopyId = await secured.duplicatePlaylist(legacySourceId);
+    const legacyCopy = await secured.getChurchPlaylist(legacyCopyId);
+    expect(legacyCopy).toMatchObject({
+      kind: 'structured',
+      playlist: {
+        versaoEstrutura: 1,
+        copiadaDePlaylist: legacySourceId,
+        momentosIgreja: legacyRead.playlist.momentosIgreja,
+      },
+    });
+    await secured.updateChurchMoment(legacySourceId, 'entrada', { versaoEstrutura: 1, tomPersonalizado: 'D' });
+    const updatedLegacy = await secured.getChurchPlaylist(legacySourceId);
+    expect(updatedLegacy?.kind).toBe('structured');
+    if (updatedLegacy?.kind !== 'structured') throw new Error('Expected the edited v1 playlist to remain structured.');
+    expect(updatedLegacy.playlist.versaoEstrutura).toBe(1);
+    await assertFails(updateDoc(doc(ownerDb, `usuarios/church-version-owner/playlists/${legacySourceId}`), {
+      versaoEstrutura: 2,
+      updatedAt: serverTimestamp(),
+    }));
+
+    await secured.deleteChurchPlaylist(legacySourceId);
+    expect(await secured.getChurchPlaylist(legacySourceId)).toBeNull();
+    const survivingV1Copy = await secured.getChurchPlaylist(legacyCopyId);
+    expect(survivingV1Copy?.kind).toBe('structured');
+    if (survivingV1Copy?.kind !== 'structured') throw new Error('Expected the v1 copy to survive source deletion.');
+    expect(survivingV1Copy.playlist.versaoEstrutura).toBe(1);
+    expect(survivingV1Copy.playlist.momentosIgreja).toHaveLength(10);
+    expect(survivingV1Copy.playlist.momentosIgreja).toEqual(legacyRead.playlist.momentosIgreja);
+    expect(survivingV1Copy.playlist.momentosIgreja[1].musicaId).toBe('legacy/orphan');
+    expect(survivingV1Copy.playlist.momentosIgreja[2].musicaId).toBe(`legacy-${'x'.repeat(1600)}`);
+    expect(survivingV1Copy.playlist.momentosIgreja.slice(3).every((moment) => (
+      moment.musicaId === null && moment.tomPersonalizado === null
+    ))).toBe(true);
+    await secured.updateChurchMoment(legacyCopyId, 'perdao', { versaoEstrutura: 1, tomPersonalizado: 'D' });
+    const editedV1Copy = await secured.getChurchPlaylist(legacyCopyId);
+    expect(editedV1Copy?.kind).toBe('structured');
+    if (editedV1Copy?.kind !== 'structured') throw new Error('Expected the v1 copy to remain accessible.');
+    expect(editedV1Copy.playlist.momentosIgreja[1]).toMatchObject({
+      momentoId: 'perdao',
+      musicaId: 'legacy/orphan',
+      tomPersonalizado: 'D',
+    });
+    expect(editedV1Copy.playlist.momentosIgreja[0]).toMatchObject({ musicaId: 'legacy-orphan' });
+    expect(editedV1Copy.playlist.momentosIgreja[1].musicaId).toBe('legacy/orphan');
+    expect(editedV1Copy.playlist.momentosIgreja[2].musicaId).toBe(`legacy-${'x'.repeat(1600)}`);
+
+    const v2CopyId = await secured.duplicatePlaylist(orphanV2SourceId);
+    const v2Copy = await secured.getChurchPlaylist(v2CopyId);
+    expect(v2Copy).toMatchObject({
+      kind: 'structured',
+      playlist: {
+        versaoEstrutura: 2,
+        copiadaDePlaylist: orphanV2SourceId,
+      },
+    });
+    if (v2Copy?.kind !== 'structured') throw new Error('Expected a v2 copy.');
+    expect(v2Copy.playlist.momentosIgreja[0]).toMatchObject({
+      referenciaMusical: { musicaId: 'orphan-v2' },
+    });
+    await assertSucceeds(updateDoc(doc(ownerDb, `usuarios/church-version-owner/playlists/${v2CopyId}`), {
+      nome: 'Cópia independente',
+      updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(ownerDb, `usuarios/church-version-owner/playlists/${v2CopyId}`), {
+      copiadaDePlaylist: 'another-source',
+      updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(ownerDb, `usuarios/church-version-owner/playlists/${v2CopyId}`), {
+      copiadaDePlaylist: deleteField(),
+      updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(ownerDb, `usuarios/church-version-owner/playlists/${v2CopyId}`), {
+      versaoEstrutura: 1,
+      updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(ownerDb, `usuarios/church-version-owner/playlists/${newPlaylistId}`), {
+      copiadaDePlaylist: orphanV2SourceId,
+      updatedAt: serverTimestamp(),
+    }));
+
+    await assertSucceeds(deleteDoc(doc(ownerDb, `usuarios/church-version-owner/playlists/${orphanV2SourceId}`)));
+    await secured.updateChurchMoment(v2CopyId, 'entrada', { versaoEstrutura: 2, referenciaMusical: null });
+    const independentCopy = await secured.getChurchPlaylist(v2CopyId);
+    expect(independentCopy).toMatchObject({
+      kind: 'structured',
+      playlist: { versaoEstrutura: 2, nome: 'Cópia independente' },
+    });
+  });
+
+  it('rejects forged playlist copies, including any changed liturgical moment', async () => {
+    const ownerDb = testEnvironment.authenticatedContext('church-copy-owner').firestore();
+    const sourceV1Moments = createEmptyChurchMoments(1);
+    sourceV1Moments[2] = { ...sourceV1Moments[2], musicaId: 'orphan-v1' };
+    const sourceV2Moments = createEmptyChurchMoments(2);
+    sourceV2Moments[7] = { ...sourceV2Moments[7], referenciaMusical: { musicaId: 'orphan-v2' } };
+    const v1SourceId = 'v1-source';
+    const v2SourceId = 'v2-source';
+    const foreignSourceId = 'foreign-source';
+
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, `usuarios/church-copy-owner/playlists/${v1SourceId}`), withCurrentTimestamps({
+        nome: 'Origem v1',
+        tipo: 'igreja',
+        versaoEstrutura: 1,
+        momentosIgreja: sourceV1Moments,
+      }));
+      await setDoc(doc(db, `usuarios/church-copy-owner/playlists/${v2SourceId}`), withCurrentTimestamps({
+        nome: 'Origem v2',
+        tipo: 'igreja',
+        versaoEstrutura: 2,
+        momentosIgreja: sourceV2Moments,
+      }));
+      await setDoc(doc(db, `usuarios/church-copy-other/playlists/${foreignSourceId}`), withCurrentTimestamps({
+        nome: 'Origem estrangeira',
+        tipo: 'igreja',
+        versaoEstrutura: 2,
+        momentosIgreja: createEmptyChurchMoments(2),
+      }));
+    });
+
+    for (const [sourceId, version, originalMoments] of [
+      [v1SourceId, 1, sourceV1Moments],
+      [v2SourceId, 2, sourceV2Moments],
+    ] as const) {
+      for (let index = 0; index < 10; index += 1) {
+        const forgedMoments = originalMoments.map((moment, momentIndex) => momentIndex === index
+          ? { ...moment, tomPersonalizado: 'D' }
+          : moment);
+        await assertFails(setDoc(doc(ownerDb, `usuarios/church-copy-owner/playlists/forged-${version}-${index}`), withCurrentTimestamps({
+          nome: 'Cópia forjada',
+          tipo: 'igreja',
+          versaoEstrutura: version,
+          momentosIgreja: forgedMoments,
+          copiadaDePlaylist: sourceId,
+        })));
+      }
+    }
+
+    await assertFails(setDoc(doc(ownerDb, 'usuarios/church-copy-owner/playlists/missing-source-copy'), withCurrentTimestamps({
+      nome: 'Origem ausente',
+      tipo: 'igreja',
+      versaoEstrutura: 2,
+      momentosIgreja: createEmptyChurchMoments(2),
+      copiadaDePlaylist: 'does-not-exist',
+    })));
+    await assertFails(setDoc(doc(ownerDb, 'usuarios/church-copy-owner/playlists/foreign-source-copy'), withCurrentTimestamps({
+      nome: 'Origem de outra conta',
+      tipo: 'igreja',
+      versaoEstrutura: 2,
+      momentosIgreja: createEmptyChurchMoments(2),
+      copiadaDePlaylist: foreignSourceId,
+    })));
+
   });
 
   it('repertoire repository creates, lists, reads, renames and deletes repertories with their items', async () => {

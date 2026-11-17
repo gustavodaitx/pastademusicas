@@ -15,7 +15,7 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 - [x] **T04 — Biblioteca de músicas, cadastro, pesquisa e visualização** `[CONCLUÍDA]`
 - [x] **T05 — Importação local de documentos (DOCX, PDF textual, TXT)** `[CONCLUÍDA]`
 - [x] **T06 — Playlists manuais (CRUD, ordenação e persistência)** `[CONCLUÍDA]`
-- [ ] **T07 — Modo Igreja (10 momentos fixos e sugestões do catálogo)** `[PENDENTE]`
+- [x] **T07 — Modo Igreja (10 momentos fixos e sugestões do catálogo)** `[CONCLUÍDA]`
 - [ ] **T08 — Modo Barzinho (geração assistida com filtros e alternância)** `[PENDENTE]`
 - [ ] **T09 — Modo Palco e rolagem automática (autoscroll)** `[PENDENTE]`
 - [ ] **T10 — Exportação PDF e TXT** `[PENDENTE]`
@@ -196,20 +196,33 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição de acorde
 
 ---
 
-### [ ] T07 — Modo Igreja (10 Momentos Fixos e Sugestões do Catálogo)
-- **Estado**: `PENDENTE`
+### [x] T07 — Modo Igreja (10 Momentos Fixos e Sugestões do Catálogo)
+- **Estado**: `CONCLUÍDA`
 - **Objetivo**: Implementar o assistente litúrgico para celebrações com os dez momentos fixos em sequência obrigatória, selecionando ou sugerindo apenas músicas reais do catálogo autorizado.
 - **Dependências**: T06.
+- **Subetapas**:
+  - [x] T07.2 — Contratos de dados e operações do repository para playlists estruturadas de Igreja.
+  - [x] T07.3 — Proteger linhagem de músicas e cópias estruturadas, preservar compatibilidade v1 e exigir v2 nas novas playlists estruturadas.
+  - [x] T07.4 — Editar playlists v1 sem migração, preservar referências órfãs v2 na interface e limitar atualizações das Rules a um momento por gravação.
+- **Garantias implementadas na T07.3**:
+  - [x] As Rules validam o UID do caminho, timestamps e estruturas v1/v2 com dez momentos canônicos.
+  - [x] Ao criar música duplicada, as Rules consultam a origem no mesmo UID e exigem igualdade dos campos musicais, exceto `duplicadaDe`, `createdAt` e `updatedAt`. A linhagem é imutável depois da criação; o conteúdo da cópia pode ser editado e a origem pode ser excluída.
+  - [x] Cópias estruturadas v1/v2 são aceitas somente quando a origem existe no mesmo UID e tipo, versão, chaves e conteúdo dos dez momentos coincidem na criação. Momentos vazios e referências órfãs são preservados; depois da criação, a cópia é independente.
+  - [x] Novas playlists estruturadas são persistidas em v2; a criação direta de estrutura v1 é rejeitada. Documentos v1 existentes continuam legíveis/editáveis e suas cópias permanecem v1, sem migração automática.
+  - [x] A suíte `src/test/firestore-rules.test.ts` e a suíte unitária de contratos foram executadas, incluindo casos positivos e negativos para as garantias acima.
+  - [x] Nas atualizações, as Rules exigem música existente para referências novas/substituídas, mas preservam referências órfãs não modificadas e cópias históricas.
+  - [x] Edição v1 pela interface preserva versão, dez momentos e referências não alteradas; referências órfãs v2 têm indicação visual e só são removidas/substituídas explicitamente.
+  - [x] Rules permitem mudança de um momento por gravação e rejeitam mudanças simultâneas de dois ou mais, sem bloquear atualizações válidas de metadados.
 - **Subtarefas**:
-  - [ ] Criar fluxo do Modo Igreja com as 10 posições estritas:
+  - [x] Criar fluxo do Modo Igreja com as 10 posições estritas:
     1. Entrada, 2. Perdão, 3. Glória, 4. Salmo, 5. Aclamação,
     6. Ofertório, 7. Santo, 8. Comunhão, 9. Pós-comunhão, 10. Final.
-  - [ ] Algoritmo de sugestão baseado no metadado `momentosLiturgicos` do catálogo do usuário.
-  - [ ] Posição sem correspondência permanece vazia com aviso para seleção manual (sem alucinação).
-  - [ ] Botão de salvar diretamente como nova playlist litúrgica.
+  - [x] Algoritmo de sugestão baseado no metadado `momentosLiturgicos` do catálogo do usuário.
+  - [x] Posição sem correspondência permanece vazia com aviso para seleção manual (sem alucinação).
+  - [x] Botão de salvar diretamente como nova playlist litúrgica.
 - **Testes Obrigatórios**:
-  - [ ] Teste unitário validando que os 10 momentos seguem rigorosamente a ordem da especificação.
-  - [ ] Teste validando que nenhuma música inexistente é gerada ou inventada.
+  - [x] Teste unitário validando que os 10 momentos seguem rigorosamente a ordem da especificação.
+  - [x] Teste validando que nenhuma música inexistente é gerada ou inventada.
 - **Critérios de Aceite**:
   - Estrutura litúrgica impecável; transparência quando não houver músicas catalogadas para um momento específico.
 

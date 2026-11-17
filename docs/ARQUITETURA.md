@@ -21,17 +21,29 @@ Dados ficam em `usuarios/{uid}`: `musicas`, `playlists/{id}/itens`, `repertorios
 
 `playlistRepository.ts` valida dados e UID, usa transações para inclusão, remoção e reordenação e lotes limitados para duplicação compensável. A reordenação pela interface aceita botões, setas do teclado e HTML drag-and-drop nativo; os botões permanecem como alternativa quando arrastar não estiver disponível. A lista é limitada a 400 itens por operação de mutação.
 
+Playlists estruturadas de Igreja são documentos únicos com dez momentos canônicos. A v1 armazena `musicaId: string | null`; a v2 armazena `referenciaMusical: { musicaId: string } | null`. Ambas preservam os dez momentos na ordem fixa. Playlists legadas de Igreja continuam no formato T06, sem migração automática, e operações genéricas de itens/reordenação não devem alterar as estruturas.
+
+O repository lê v1 e v2, mantém a versão ao duplicar uma playlist estruturada e copia os dez momentos sem consultar a existência de cada música, preservando posições vazias e referências órfãs. `copiadaDePlaylist` identifica a origem imediata da cópia. As Rules verificam a origem no mesmo caminho de UID, a igualdade do tipo, versão, chaves e conteúdo dos dez momentos no momento da criação. Depois disso, a cópia pode ser editada independentemente e continua válida se a origem for excluída.
+
+A duplicação de música também grava o ID imediato em `duplicadaDe` e agora lê a origem e grava a cópia em uma transação. As Rules exigem a existência da origem no mesmo UID e igualdade de todos os campos musicais, exceto `duplicadaDe`, `createdAt` e `updatedAt`, na criação. A presença e o valor da referência ficam imutáveis depois da criação; as alterações musicais posteriores da cópia são independentes da origem.
+
+Novas playlists estruturadas criadas pelo repository são v2. Entradas ainda recebidas em formato v1 são normalizadas para v2 durante uma nova criação; isso não migra documentos existentes. As Rules rejeitam nova criação estruturada v1, mas permitem leitura, edição e cópia v1→v1. Playlists planas/legadas e manuais da T06 continuam usando o formato simples e `itens/{musicaId}`.
+
+Limitação: as Rules validam o formato das referências nos momentos, mas não consultam cada documento de música para verificar sua existência. O repository valida músicas ao criar ou alterar referências; cópias preservam os IDs armazenados, inclusive os órfãos.
+
 O tema usa cache local para inicialização; a tela Configurações sincroniza preferências com o Firestore. Fonte e velocidade têm cache local separado por UID para Modo Palco.
 
 ## Validação e emulação
 
-Testes de repositories e regras usam Firebase Emulator Suite. O comando de validação completa é:
+Testes de repositories e regras usam Firebase Emulator Suite. A suíte de Rules tem 45 testes e pode ser executada com o emulador ativo:
 
 ```bash
-firebase emulators:exec --only firestore --project demo-pasta-de-musica-t03 "npm test"
+firebase emulators:exec --only firestore --project demo-pasta-de-musica-t03 "npx vitest run src/test/firestore-rules.test.ts --reporter=basic"
 ```
 
-A interface não se conecta automaticamente ao emulador. As telas de Modo Igreja/Barzinho ainda não carregam um repertório salvo integralmente; o Modo Palco atual não seleciona cifras. Não devem apresentar conteúdo de exemplo como persistido.
+Os testes incluem cópias legítimas v1/v2, rejeição de origem ausente/de outro UID e conteúdo divergente em cada posição, imutabilidade dos campos de linhagem, edição independente, exclusão da origem, compatibilidade v1 e criação v2. A suíte também mantém os casos de segurança e persistência das playlists manuais/legadas.
+
+A interface não se conecta automaticamente ao emulador. O Modo Igreja abre e edita playlists estruturadas v1 sem migrá-las, preservando a versão e atualizando somente os momentos alterados. Em v2, referências ausentes do catálogo são identificadas como históricas, permanecem no estado e só são removidas ou substituídas por ação explícita. As Rules limitam atualizações v1/v2 a no máximo um momento alterado por gravação; momentos não modificados, inclusive referências órfãs, são preservados. O Modo Palco atual não seleciona cifras. Não devem apresentar conteúdo de exemplo como persistido.
 
 ## Importação local de documentos (T05)
 

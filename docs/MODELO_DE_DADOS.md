@@ -24,11 +24,15 @@ usuarios/{uid}
     categorias, tags, momentosLiturgicos, estilo: string[]
     origemTipo: catalogo | upload_local | google_drive | manual
     driveFileId, arquivoNome, licencaOuPermissao: string | null
+    duplicadaDe?: string (ID da origem imediata, em cópia)
     createdAt, updatedAt: Timestamp
   playlists/{playlistId}
     nome: string
     tipo: manual | igreja | barzinho
     createdAt, updatedAt: Timestamp
+    versaoEstrutura?: 1 | 2 (playlist de Igreja estruturada)
+    momentosIgreja?: MomentoIgreja[10] (estrutura v1 ou v2)
+    copiadaDePlaylist?: string (ID da playlist de origem, em cópia)
     itens/{musicaId}
       musicaId: string
       posicao: integer (1-based)
@@ -56,6 +60,18 @@ O perfil em `usuarios/{uid}` tem tipo `UserProfile` e não é criado automaticam
 `playlists/{playlistId}` contém somente `nome`, `tipo` (`manual`, `igreja` ou `barzinho`) e timestamps. Cada `itens/{musicaId}` é um documento independente com `musicaId` igual ao ID da música, `posicao` inteira iniciada em 1, `momento` textual opcional (até 100 caracteres) e `tomPersonalizado` textual opcional (até 12 caracteres). O tom personalizado pertence à associação da música com a playlist; não altera `musicas/{musicaId}.tomOriginal`. A duplicação cria novo documento pai e novos documentos de item, preservando a sequência e os metadados; não copia nem modifica documentos da Biblioteca.
 
 Uma música removida da Biblioteca pode deixar sua referência na playlist. A leitura preserva essa associação e a interface a apresenta como indisponível até que o usuário remova o item ou a playlist.
+
+### Playlists estruturadas de Igreja (T07)
+
+Uma playlist estruturada usa `tipo: igreja`, `versaoEstrutura` igual a `1` ou `2` e exatamente dez posições em `momentosIgreja`, na ordem canônica: `entrada`, `perdao`, `gloria`, `salmo`, `aclamacao`, `ofertorio`, `santo`, `comunhao`, `pos-comunhao`, `final`. Em v1, cada posição contém `momentoId`, `musicaId: string | null` e `tomPersonalizado: string | null`. Em v2, a referência é `referenciaMusical: { musicaId: string } | null`, junto com `momentoId` e `tomPersonalizado`. Posições vazias são representadas por `null`, sem documento de música fictício.
+
+O repository identifica estruturas pela versão e pelos campos, rejeita estruturas inválidas/desconhecidas e não migra automaticamente playlists antigas de tipo Igreja. Novas playlists estruturadas são persistidas como v2; entradas de criação no formato v1 são normalizadas para v2, enquanto cópias e edições de documentos v1 mantêm v1. `createEmptyChurchMoments()` usa v2 por padrão. Playlists manuais e legadas continuam usando `itens/{musicaId}`.
+
+`duplicadaDe` registra o ID imediato da música de origem. Na criação da cópia, as Rules exigem uma origem existente no mesmo UID e igualdade dos campos musicais, exceto a referência e os timestamps. Depois da criação, a linhagem é imutável, mas a cópia pode ser editada e não depende da existência continuada da origem.
+
+`copiadaDePlaylist` registra o ID imediato da playlist de origem. As Rules exigem origem existente no mesmo UID, tipo e versão iguais e igualdade estrutural das chaves e conteúdo dos dez momentos, incluindo posições vazias, referências órfãs e tons. A igualdade é verificada somente na criação; depois, a cópia pode ser editada independentemente e permanece válida se a origem for excluída. Ambas as versões v1 e v2 são copiadas sem migração.
+
+As Rules validam o formato das referências e, em atualizações, exigem existência para uma referência musical nova ou substituída; não exigem existência das referências não modificadas. O repository também valida referências novas. Atualizações estruturadas alteram no máximo um dos dez momentos por gravação; referências históricas órfãs e posições vazias permanecem intactas quando não modificadas.
 
 ### Compatibilidade da Biblioteca
 
