@@ -73,6 +73,12 @@ O repository identifica estruturas pela versão e pelos campos, rejeita estrutur
 
 As Rules validam o formato das referências e, em atualizações, exigem existência para uma referência musical nova ou substituída; não exigem existência das referências não modificadas. O repository também valida referências novas. Atualizações estruturadas alteram no máximo um dos dez momentos por gravação; referências históricas órfãs e posições vazias permanecem intactas quando não modificadas.
 
+### Playlists do Modo Barzinho (T08)
+
+O gerador do Modo Barzinho cria playlists convencionais com `tipo: barzinho` utilizando a operação `createPlaylistWithItems()`. O documento principal em `playlists/{playlistId}` armazena `nome`, `tipo: 'barzinho'`, `createdAt` e `updatedAt`. As músicas selecionadas são gravadas em `playlists/{playlistId}/itens/{musicaId}` com `musicaId`, `posicao` sequencial (1 a N), `momento: null` e `tomPersonalizado: null`.
+
+As músicas selecionadas provêm exclusivamente do catálogo real do usuário autenticado. A escrita dos itens é realizada em lotes atômicos de até 10 itens com rollback compensatório em caso de falha. As playlists geradas podem ser abertas, editadas, reordenadas e excluídas na tela de Playlists (`/playlists`), mantendo total compatibilidade com as regras de segurança e o formato manual da T06.
+
 ### Compatibilidade da Biblioteca
 
 `compositor` e `observacoes` são opcionais. Documentos criados antes da inclusão desses campos continuam válidos e são exibidos sem metadados ausentes; não é necessária migração em massa. Escritas atuais representam campos opcionais vazios como `null`. Compositor tem limite de 200 caracteres e observações, 5.000 caracteres. Ambos são normalizados nas bordas do texto pelo repository, preservando acentos; observações preservam quebras de linha.
