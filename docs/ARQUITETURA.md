@@ -43,7 +43,18 @@ firebase emulators:exec --only firestore --project demo-pasta-de-musica-t03 "npx
 
 Os testes incluem cópias legítimas v1/v2, rejeição de origem ausente/de outro UID e conteúdo divergente em cada posição, imutabilidade dos campos de linhagem, edição independente, exclusão da origem, compatibilidade v1 e criação v2. A suíte também mantém os casos de segurança e persistência das playlists manuais/legadas.
 
-A interface não se conecta automaticamente ao emulador. O Modo Igreja abre e edita playlists estruturadas v1 sem migrá-las, preservando a versão e atualizando somente os momentos alterados. Em v2, referências ausentes do catálogo são identificadas como históricas, permanecem no estado e só são removidas ou substituídas por ação explícita. As Rules limitam atualizações v1/v2 a no máximo um momento alterado por gravação; momentos não modificados, inclusive referências órfãs, são preservados. O Modo Palco atual não seleciona cifras. Não devem apresentar conteúdo de exemplo como persistido.
+A interface não se conecta automaticamente ao emulador. O Modo Igreja abre e edita playlists estruturadas v1 sem migrá-las, preservando a versão e atualizando somente os momentos alterados. Em v2, referências ausentes do catálogo são identificadas como históricas, permanecem no estado e só são removidas ou substituídas por ação explícita. As Rules limitam atualizações v1/v2 a no máximo um momento alterado por gravação; momentos não modificados, inclusive referências órfãs, são preservados. O Modo Barzinho gera seleções dinâmicas a partir da biblioteca real e salva playlists com itens ordenados. O Modo Palco atual não seleciona cifras. Não devem apresentar conteúdo de exemplo como persistido.
+
+## Modo Barzinho (T08)
+
+`BarModePage.tsx` implementa o gerador inteligente de repertório para apresentações e shows em barzinhos:
+- Carrega as músicas reais da biblioteca do usuário via `listMusics()`.
+- Oferece parâmetros interativos: estilo musical (extraído dinamicamente do catálogo e opção "Todos"), quantidade (slider de 5 a 40 músicas), preferência de tom (qualquer tom, tons graves C/D, médios E/F/G, altos A/B) e alternância de ritmo (animada vs. lenta).
+- Executa a seleção e ordenação em memória via `generateBarRepertoire()` em `barModeGenerator.ts`, classificando andamentos heurísticamente (`classifyTempo()`) a partir de tags, observações, categorias e estilo, sem necessidade de campos adicionais no esquema ou chamadas extras ao Firestore.
+- Garante total ausência de músicas fictícias ou alucinações (anti-hallucination). Deduplica rigorosamente os itens por ID.
+- Exibe banner de aviso explícito caso o número de músicas compatíveis seja menor que o solicitado ou caso a biblioteca esteja vazia.
+- Permite descarte manual de músicas individuais da prévia antes de salvar.
+- Converte a seleção diretamente em uma playlist manual editável (`tipo: 'barzinho'`) através de `createPlaylistWithItems()`, validando a existência de todas as referências na biblioteca e persistindo o documento em `playlists/{playlistId}` e seus itens em lotes na subcoleção `itens/{musicaId}` com posições 1..N.
 
 ## Importação local de documentos (T05)
 

@@ -16,7 +16,7 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 - [x] **T05 — Importação local de documentos (DOCX, PDF textual, TXT)** `[CONCLUÍDA]`
 - [x] **T06 — Playlists manuais (CRUD, ordenação e persistência)** `[CONCLUÍDA]`
 - [x] **T07 — Modo Igreja (10 momentos fixos e sugestões do catálogo)** `[CONCLUÍDA]`
-- [ ] **T08 — Modo Barzinho (geração assistida com filtros e alternância)** `[PENDENTE]`
+- [x] **T08 — Modo Barzinho (geração assistida com filtros e alternância)** `[CONCLUÍDA]`
 - [ ] **T09 — Modo Palco e rolagem automática (autoscroll)** `[PENDENTE]`
 - [ ] **T10 — Exportação PDF e TXT** `[PENDENTE]`
 - [ ] **T11 — Exportação DOCX e HTML** `[PENDENTE]`
@@ -228,21 +228,23 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição de acorde
 
 ---
 
-### [ ] T08 — Modo Barzinho (Geração Assistida com Filtros e Alternância)
-- **Estado**: `PENDENTE`
+### [x] T08 — Modo Barzinho (Geração Assistida com Filtros e Alternância)
+- **Estado**: `CONCLUÍDA`
 - **Objetivo**: Gerador inteligente de repertório para apresentações e shows em barzinhos com base em filtros de estilo, quantidade de músicas (5 a 40), preferências de tom e alternância de ritmos/andamento.
 - **Dependências**: T06.
 - **Subtarefas**:
-  - [ ] Interface de parâmetros do Modo Barzinho (estilo, quantidade, preferência de tom, ritmo).
-  - [ ] Algoritmo de seleção sobre o repertório do usuário evitando duplicatas.
-  - [ ] Lógica de intercalação de ritmos para dinamismo do repertório.
-  - [ ] Aviso explícito caso o número de músicas compatíveis seja menor que o solicitado.
-  - [ ] Conversão direta do resultado em playlist manual editável.
+  - [x] Interface de parâmetros do Modo Barzinho (estilo, quantidade, preferência de tom, ritmo).
+  - [x] Algoritmo de seleção sobre o repertório do usuário evitando duplicatas.
+  - [x] Lógica de intercalação de ritmos para dinamismo do repertório.
+  - [x] Aviso explícito caso o número de músicas compatíveis seja menor que o solicitado.
+  - [x] Conversão direta do resultado em playlist manual editável.
 - **Testes Obrigatórios**:
-  - [ ] Teste unitário do algoritmo de seleção e alternância.
-  - [ ] Teste de comportamento quando a biblioteca possui menos músicas do que a quantidade solicitada.
+  - [x] Teste unitário do algoritmo de seleção e alternância (`src/test/barModeGenerator.test.ts` — 18 testes aprovados).
+  - [x] Teste de comportamento quando a biblioteca possui menos músicas do que a quantidade solicitada (`src/test/barModeGenerator.test.ts` e `src/test/BarModePage.test.tsx`).
+  - [x] Testes de persistência de playlist com itens e rollback compensatório (`src/test/barPlaylistRepository.test.ts` — 6 testes aprovados).
+  - [x] Teste de interface do Modo Barzinho (`src/test/BarModePage.test.tsx` — 9 testes aprovados).
 - **Critérios de Aceite**:
-  - Repertório montado sem repetições indevidas e sem criar dados fictícios.
+  - [x] Repertório montado sem repetições indevidas e sem criar dados fictícios.
 
 ---
 

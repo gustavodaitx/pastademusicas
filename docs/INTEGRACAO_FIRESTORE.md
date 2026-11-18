@@ -51,6 +51,17 @@ Criações e atualizações usam `serverTimestamp()`; as regras verificam que os
 - Duplicar valida pai, itens e existência das músicas dentro de transação, cria um pai novo com sufixo “(cópia)” e grava itens em lotes de até 10, preservando posição, momento e tom personalizado. Se a gravação falhar, tenta excluir os itens escritos e o pai da cópia; falha também na compensação é sinalizada explicitamente. A origem não é alterada.
 - Repositories limitam operações de lista a 400 itens. Em 400 itens, reordenar ou excluir a playlist grava no máximo 401 documentos na transação; a duplicação grava um pai e 400 itens em lotes pequenos. Esses fluxos usam leituras e gravações do Firestore e não têm paginação ou cache.
 
+### Modo Barzinho (T08)
+
+O Modo Barzinho realiza leitura pontual da coleção `musicas` do usuário autenticado e gera repertórios com filtragem e ordenação inteiramente em memória no cliente, minimizando o consumo de leituras do plano Spark.
+
+A persistência do repertório gerado utiliza `createPlaylistWithItems()` em `playlistRepository.ts`:
+- Valida o nome e o tipo (`barzinho` ou `manual`).
+- Valida e confirma em transação que todas as referências apontam para músicas existentes em `usuarios/{uid}/musicas/{musicaId}`.
+- Grava o documento pai em `usuarios/{uid}/playlists/{playlistId}`.
+- Grava os itens em lotes (`writeBatch`) de até 10 itens na subcoleção `itens/{musicaId}`, definindo posições ordinais de 1 a N.
+- Em caso de falha na gravação de qualquer lote, executa rollback de compensação excluindo os itens parciais e o documento pai.
+
 ## Regras de segurança
 
 `firestore.rules` restringe leituras e gravações ao dono do caminho, valida esquemas suportados e termina em negação global. Para cópias, as Rules validam a origem autorizada e a igualdade inicial; atualizações preservam imutáveis os campos de linhagem e a versão. Referências de momentos não modificados não precisam existir; em atualizações, referências novas ou substituídas são verificadas. A suíte de `src/test/firestore-rules.test.ts` tem 45 testes e cobre cópias válidas/forjadas, os dez momentos, compatibilidade v1/v2, rejeição de alterações simultâneas e os controles de propriedade. Sem `FIRESTORE_EMULATOR_HOST`, os testes são pulados por `describe.skipIf`.
@@ -97,7 +108,7 @@ Operações de exclusão, remoção e reordenação de itens são transacionais.
 - Excluir uma música não remove referências existentes em playlists e repertórios. A interface mostra o item como indisponível; a referência fica armazenada até remoção manual.
 - Excluir um documento pai no Firestore não apaga automaticamente sua subcoleção. Os repositories fazem exclusão explícita dos itens antes do pai, mas as regras não conseguem enumerar/verificar uma subcoleção inteira para impedir que um cliente autenticado delete o pai diretamente. Isso pode deixar documentos órfãos inacessíveis e consumindo armazenamento. Não apague pais pelo Console sem conferir/limpar os itens.
 - A exclusão de uma lista com mais de 400 itens requer uma estratégia futura em múltiplas transações; não remova o limite sem revisar atomicidade e cotas.
-- Modo Igreja, Modo Barzinho e seleção de música no Modo Palco ainda não carregam repertórios/cifras do Firestore integralmente. A interface não deve tratar prévias fixas como dados persistidos.
+- A seleção de música no Modo Palco ainda não carrega repertórios/cifras do Firestore integralmente. A interface não deve tratar prévias fixas como dados persistidos.
 - Preferências de tema podem ser alteradas pelo atalho da Navbar e ficam imediatamente no cache local. Para sincronizar o valor da conta, use Salvar preferências em Configurações. Preferências de fonte e autoscroll têm cache local separado por UID.
 
 ## Publicação futura das regras

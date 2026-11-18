@@ -45,6 +45,11 @@ export type PlaylistMomentUpdate = {
   tomPersonalizado?: string | null;
 };
 export type ChurchPlaylistFormat = 'structured' | 'legacy' | 'not-church' | 'invalid';
+export type CreatePlaylistWithItemsInput = {
+  nome: string;
+  tipo?: PlaylistType;
+  musicIds: string[];
+};
 
 export class PlaylistRepositoryError extends Error {
   constructor(message: string, readonly code: string) {
@@ -1069,12 +1074,95 @@ export function createPlaylistRepository(firestore: Firestore | null, getUid: ()
         throw wrapError(error);
       }
     },
+
+    async createPlaylistWithItems(input: CreatePlaylistWithItemsInput): Promise<string> {
+      try {
+        if (!input || typeof input !== 'object') {
+          throw new PlaylistRepositoryError('Informe os dados da playlist.', 'validation/type');
+        }
+        const nome = validateName(input.nome);
+        const tipo = validateType(input.tipo ?? 'barzinho');
+        if (tipo === 'igreja') {
+          throw new PlaylistRepositoryError(
+            'Use as operações específicas do Modo Igreja para criar playlists estruturadas.',
+            'validation/type',
+          );
+        }
+        if (!Array.isArray(input.musicIds)) {
+          throw new PlaylistRepositoryError('A lista de músicas deve ser uma lista de identificadores.', 'validation/type');
+        }
+        if (new Set(input.musicIds).size !== input.musicIds.length) {
+          throw new PlaylistRepositoryError('A lista contém músicas duplicadas.', 'validation/duplicate');
+        }
+        if (input.musicIds.length > maxItemsPerPlaylist) {
+          throw new PlaylistRepositoryError(`A playlist aceita até ${maxItemsPerPlaylist} músicas.`, 'validation/too-many-items');
+        }
+        input.musicIds.forEach((id) => validateId(id, 'da música'));
+
+        const uid = requireUid(getUid);
+        const playlists = userPlaylistCollection();
+        const playlistRef = doc(playlists);
+        const musicRefs = input.musicIds.map((id) => doc(firestore!, 'usuarios', uid, 'musicas', id));
+
+        await runTransaction(firestore!, async (transaction) => {
+          const musicSnapshots = await Promise.all(musicRefs.map((ref) => transaction.get(ref)));
+          if (musicSnapshots.some((snapshot) => !snapshot.exists())) {
+            throw new PlaylistRepositoryError('A playlist contém uma música que não existe na sua biblioteca.', 'invalid-music-reference');
+          }
+          transaction.set(playlistRef, {
+            nome,
+            tipo,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        });
+
+        const writtenMusicIds: string[] = [];
+        try {
+          for (let offset = 0; offset < input.musicIds.length; offset += maxItemsPerCopyBatch) {
+            const batch = writeBatch(firestore!);
+            const chunk = input.musicIds.slice(offset, offset + maxItemsPerCopyBatch);
+            chunk.forEach((musicId, index) => {
+              const position = offset + index + 1;
+              batch.set(doc(playlistRef, 'itens', musicId), {
+                musicaId: musicId,
+                posicao: position,
+                momento: null,
+                tomPersonalizado: null,
+              });
+              writtenMusicIds.push(musicId);
+            });
+            await batch.commit();
+          }
+          return playlistRef.id;
+        } catch (itemError) {
+          try {
+            const cleanup = writeBatch(firestore!);
+            writtenMusicIds.forEach((musicId) => cleanup.delete(doc(playlistRef, 'itens', musicId)));
+            cleanup.delete(playlistRef);
+            await cleanup.commit();
+          } catch (cleanupError) {
+            const code = typeof cleanupError === 'object' && cleanupError !== null && 'code' in cleanupError
+              ? String(cleanupError.code)
+              : 'firestore/cleanup-failed';
+            throw new PlaylistRepositoryError(
+              'A criação da playlist falhou e não foi possível limpar os dados incompletos.',
+              code,
+            );
+          }
+          throw itemError;
+        }
+      } catch (error) {
+        throw wrapError(error);
+      }
+    },
   };
 }
 
 const repository = createPlaylistRepository(db, () => auth?.currentUser?.uid ?? null);
 
 export const createPlaylist = repository.createPlaylist;
+export const createPlaylistWithItems = repository.createPlaylistWithItems;
 export const listPlaylists = repository.listPlaylists;
 export const getPlaylistById = repository.getPlaylistById;
 export const createChurchPlaylist = repository.createChurchPlaylist;
