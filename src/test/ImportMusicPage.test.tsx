@@ -77,7 +77,7 @@ describe('ImportMusicPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Nenhuma música foi salva.');
   });
 
-  it('shows a loading state while extracting', async () => {
+  it('shows a DOCX loading state and marks the selected file as busy while extracting', async () => {
     let resolveExtraction: (text: string) => void = () => undefined;
     mocks.extractAndValidateFile.mockReturnValue(new Promise<string>((resolve) => {
       resolveExtraction = resolve;
@@ -85,12 +85,14 @@ describe('ImportMusicPage', () => {
     renderPage();
 
     fireEvent.change(screen.getByLabelText('Selecionar arquivo para importação'), {
-      target: { files: [createFile('letra.txt')] },
+      target: { files: [createFile('letra.docx')] },
     });
 
     expect(screen.getByRole('status')).toHaveTextContent('Extraindo texto localmente');
+    expect(screen.getByLabelText('Arquivo selecionado')).toHaveAttribute('aria-busy', 'true');
     resolveExtraction('C\nletra');
     expect(await screen.findByLabelText('Texto extraído editável')).toHaveValue('C\nletra');
+    expect(screen.getByLabelText('Arquivo selecionado')).toHaveAttribute('aria-busy', 'false');
   });
 
   it('replaces a file while extraction is in progress and ignores the stale result', async () => {

@@ -108,6 +108,7 @@ describe('integração da importação com o cadastro da Biblioteca', () => {
       driveFileId: null,
     })));
     expect(await screen.findByRole('status')).toHaveTextContent('Música importada e salva na sua biblioteca.');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText('Biblioteca de Músicas')).toBeInTheDocument();
   });
 
@@ -120,6 +121,21 @@ describe('integração da importação com o cadastro da Biblioteca', () => {
     expect(await screen.findByLabelText('Texto extraído editável')).toHaveValue(content);
     expect(screen.getByText('Canção.docx')).toBeInTheDocument();
     expect(mocks.createMusic).not.toHaveBeenCalled();
+  });
+
+  it('keeps the imported song form bounded with a scrollable field area and reachable actions', async () => {
+    await prepareImportedDraft('Conteúdo importado');
+    const dialog = screen.getByRole('dialog', { name: 'Nova música' });
+    const form = dialog.querySelector('form');
+    const fieldArea = form?.firstElementChild;
+    const actions = form?.lastElementChild;
+
+    expect(dialog.className).toContain('supports-[height:100dvh]:max-h-[calc(100dvh-1.5rem)]');
+    expect(fieldArea).toHaveClass('overflow-y-auto');
+    expect(fieldArea).toHaveClass('min-h-0');
+    expect(actions).toHaveTextContent('Voltar à prévia');
+    expect(actions).toHaveTextContent('Salvar música');
+    expect(screen.getByLabelText(/Conteúdo\/cifra/)).toHaveValue('Conteúdo importado');
   });
 
   it('keeps the imported content in the form and shows a persistence error', async () => {

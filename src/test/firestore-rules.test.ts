@@ -509,6 +509,39 @@ describe.skipIf(!process.env.FIRESTORE_EMULATOR_HOST)('Firestore Security Rules 
     });
   });
 
+  it('lists legacy playlists with missing dates and preserves server timestamps on new playlists', async () => {
+    const uid = 'playlist-date-compatibility';
+    const playlists = playlistsFor(uid);
+    const newPlaylistId = await playlists.createPlaylist({ nome: 'Playlist nova', tipo: 'manual' });
+    const legacyNullDateId = 'legacy-null-date';
+    const legacyMissingDateId = 'legacy-missing-date';
+
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, `usuarios/${uid}/playlists/${legacyNullDateId}`), {
+        nome: 'Playlist antiga com data nula',
+        tipo: 'manual',
+        createdAt: null,
+        updatedAt: null,
+      });
+      await setDoc(doc(firestore, `usuarios/${uid}/playlists/${legacyMissingDateId}`), {
+        nome: 'Playlist antiga sem datas',
+        tipo: 'manual',
+      });
+    });
+
+    const listed = await playlists.listPlaylists();
+    expect(listed.map(({ id }) => id)).toEqual(expect.arrayContaining([
+      newPlaylistId,
+      legacyNullDateId,
+      legacyMissingDateId,
+    ]));
+    expect(listed.find(({ id }) => id === newPlaylistId)?.createdAt).toBeInstanceOf(Timestamp);
+    expect(listed.find(({ id }) => id === newPlaylistId)?.updatedAt).toBeInstanceOf(Timestamp);
+    expect(listed.find(({ id }) => id === legacyNullDateId)?.createdAt).toBeNull();
+    expect(listed.find(({ id }) => id === legacyMissingDateId)?.createdAt).toBeUndefined();
+  });
+
   it('playlist repository duplicates an empty playlist with a new ID and leaves the original unchanged', async () => {
     const playlists = playlistsFor('playlist-owner');
     const sourceId = await playlists.createPlaylist({ nome: 'Lista vazia', tipo: 'barzinho' });

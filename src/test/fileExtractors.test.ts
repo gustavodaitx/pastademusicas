@@ -85,6 +85,42 @@ describe('extractTxtText', () => {
 });
 
 describe('extractDocxText', () => {
+  it('runs Mammoth in a worker and transfers the file bytes without copying', async () => {
+    const workerInstances: {
+      onmessage: ((event: MessageEvent<{ text?: string; error?: string }>) => void) | null;
+      onerror: ((event: ErrorEvent) => void) | null;
+      onmessageerror: (() => void) | null;
+      postMessage: ReturnType<typeof vi.fn>;
+      terminate: ReturnType<typeof vi.fn>;
+    }[] = [];
+    class MockWorker {
+      onmessage: ((event: MessageEvent<{ text?: string; error?: string }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+      onmessageerror: (() => void) | null = null;
+      postMessage = vi.fn((message: { arrayBuffer: ArrayBuffer }, transfer: Transferable[]) => {
+        queueMicrotask(() => this.onmessage?.({ data: { text: '  C  \nCanção  ' } } as MessageEvent<{ text: string }>));
+        expect(transfer).toEqual([message.arrayBuffer]);
+      });
+      terminate = vi.fn();
+
+      constructor() {
+        workerInstances.push(this);
+      }
+    }
+    vi.stubGlobal('Worker', MockWorker);
+
+    try {
+      const result = await extractDocxText(fileWithText('cifra.docx', 'bytes'));
+
+      expect(result).toBe('  C  \nCanção  ');
+      expect(workerInstances).toHaveLength(1);
+      expect(workerInstances[0].postMessage).toHaveBeenCalledOnce();
+      expect(workerInstances[0].terminate).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('extracts text, accents, and paragraph breaks from a small DOCX file', async () => {
     const bytes = new Uint8Array(readFileSync(resolve(process.cwd(), 'src', 'test', 'fixtures', 'song.docx')));
 

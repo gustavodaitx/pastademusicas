@@ -169,7 +169,7 @@ export const ImportMusicPage = () => {
       )}
 
       {sourceFileName && (
-        <section aria-label="Arquivo selecionado" className="space-y-4">
+        <section aria-label="Arquivo selecionado" aria-busy={extractionState === 'processing'} className="space-y-4">
           <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <FileCheck aria-hidden="true" className="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
