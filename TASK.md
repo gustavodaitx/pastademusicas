@@ -17,7 +17,7 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 - [x] **T06 — Playlists manuais (CRUD, ordenação e persistência)** `[CONCLUÍDA]`
 - [x] **T07 — Modo Igreja (10 momentos fixos e sugestões do catálogo)** `[CONCLUÍDA]`
 - [x] **T08 — Modo Barzinho (geração assistida com filtros e alternância)** `[CONCLUÍDA]`
-- [ ] **T09 — Modo Palco e rolagem automática (autoscroll)** `[PENDENTE]`
+- [x] **T09 — Modo Palco e rolagem automática (autoscroll)** `[CONCLUÍDA]`
 - [ ] **T10 — Exportação PDF e TXT** `[PENDENTE]`
 - [ ] **T11 — Exportação DOCX e HTML** `[PENDENTE]`
 - [ ] **T12 — Integração Google Drive (OAuth Picker e escopos mínimos)** `[PENDENTE]`
@@ -248,24 +248,34 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição de acorde
 
 ---
 
-### [ ] T09 — Modo Palco e Rolagem Automática (Autoscroll)
-- **Estado**: `PENDENTE`
+### [x] T09 — Modo Palco e Rolagem Automática (Autoscroll)
+- **Estado**: `CONCLUÍDA`
 - **Objetivo**: Construir a visualização de palco com tema escuro de alto contraste, tipografia monoespaçada ajustável, controle fino de rolagem automática contínua (iniciar, pausar, acelerar, desacelerar, reiniciar) e navegação entre músicas.
 - **Dependências**: T04, T06.
 - **Subtarefas**:
-  - [ ] Layout em tela cheia (Full Screen) otimizado para celulares, tablets e notebooks.
-  - [ ] Motor de autoscroll suave com `requestAnimationFrame`.
-  - [ ] Controles flutuantes ou em barra fixa: Iniciar, Pausar, Reiniciar, Slider de Velocidade (1 a 10).
-  - [ ] Controle de tamanho de fonte (+ / - / reset) com ajuste de entrelinha para não perder o alinhamento das cifras.
-  - [ ] Transposição em tempo real durante a execução.
-  - [ ] Navegação Próxima / Anterior para músicas de uma playlist ativa.
+  - [x] Layout em tela cheia (Full Screen) otimizado para celulares, tablets e notebooks.
+  - [x] Motor de autoscroll suave com `requestAnimationFrame`.
+  - [x] Controles flutuantes ou em barra fixa: Iniciar, Pausar, Reiniciar, Slider de Velocidade (1 a 10).
+  - [x] Controle de tamanho de fonte (+ / - / reset) com ajuste de entrelinha para não perder o alinhamento das cifras.
+  - [x] Transposição em tempo real durante a execução.
+  - [x] Navegação Próxima / Anterior para músicas de uma playlist ativa.
 - **Testes Obrigatórios**:
-  - [ ] Teste de comportamento dos controles de autoscroll (iniciar, pausar, reiniciar, alterar velocidade).
-  - [ ] Teste de usabilidade e visualização em telas pequenas (mobile portrait e landscape).
+  - [x] Teste de comportamento dos controles de autoscroll (iniciar, pausar, reiniciar, alterar velocidade).
+  - [x] Teste de usabilidade e visualização em telas pequenas (mobile portrait e landscape), tablet e notebook.
 - **Critérios de Aceite**:
   - Rolagem fluida sem travamentos; interface utilizável com toques simples em tela sensível ao toque.
+- **Validação manual (2026-11-23)**: o usuário confirmou a inspeção visual e prática do Modo Palco nos quatro viewports solicitados: celular vertical (390×844), celular horizontal (844×390), tablet (768×1024) e notebook (1366×768).
 
 ---
+
+### Atualização da validação T09 (2026-11-23)
+- [x] Auditoria do ciclo RAF: loop único; pausas, reinício, desmontagem e troca de música cancelam o frame pendente. A retomada após suspensão limita o intervalo para evitar saltos.
+- [x] Teste de troca de faixa durante execução: 34 testes focados de StageMode, autoscroll e transposição aprovados.
+- [x] Suíte geral: 216 testes passaram; 46 testes de Firestore Rules foram ignorados sem o emulador e não são contabilizados como aprovados.
+- [x] TypeScript e build passaram. Lint passou com 2 avisos preexistentes em `ChurchModePage.tsx`; o build reportou chunks acima de 500 kB.
+- [x] `git diff --check` passou; houve somente avisos de conversão CRLF em arquivos preexistentes do Modo Palco.
+- [x] Inspeção manual nos viewports 390×844, 844×390, 768×1024 e 1366×768 confirmada pelo usuário.
+- **Estado da T09**: `CONCLUÍDA`, com validação automatizada registrada acima e inspeção manual confirmada pelo usuário.
 
 ### [ ] T10 — Exportação PDF e TXT
 - **Estado**: `PENDENTE`

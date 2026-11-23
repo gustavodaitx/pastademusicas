@@ -43,7 +43,15 @@ firebase emulators:exec --only firestore --project demo-pasta-de-musica-t03 "npx
 
 Os testes incluem cópias legítimas v1/v2, rejeição de origem ausente/de outro UID e conteúdo divergente em cada posição, imutabilidade dos campos de linhagem, edição independente, exclusão da origem, compatibilidade v1 e criação v2. A suíte também mantém os casos de segurança e persistência das playlists manuais/legadas.
 
-A interface não se conecta automaticamente ao emulador. O Modo Igreja abre e edita playlists estruturadas v1 sem migrá-las, preservando a versão e atualizando somente os momentos alterados. Em v2, referências ausentes do catálogo são identificadas como históricas, permanecem no estado e só são removidas ou substituídas por ação explícita. As Rules limitam atualizações v1/v2 a no máximo um momento alterado por gravação; momentos não modificados, inclusive referências órfãs, são preservados. O Modo Barzinho gera seleções dinâmicas a partir da biblioteca real e salva playlists com itens ordenados. O Modo Palco atual não seleciona cifras. Não devem apresentar conteúdo de exemplo como persistido.
+A interface não se conecta automaticamente ao emulador. O Modo Igreja abre e edita playlists estruturadas v1 sem migrá-las, preservando a versão e atualizando somente os momentos alterados. Em v2, referências ausentes do catálogo são identificadas como históricas, permanecem no estado e só são removidas ou substituídas por ação explícita. As Rules limitam atualizações v1/v2 a no máximo um momento alterado por gravação; momentos não modificados, inclusive referências órfãs, são preservados. O Modo Barzinho gera seleções dinâmicas a partir da biblioteca real e salva playlists com itens ordenados. O Modo Palco carrega músicas reais da Biblioteca ou itens ordenados de playlists manuais e estruturadas de Igreja, usando os repositories existentes. Referências indisponíveis são ignoradas na fila de execução e informadas na tela; os documentos originais não são alterados.
+
+## Modo Palco (T09)
+
+`StageModePage.tsx` usa os parâmetros `musicaId` e `playlistId` na rota protegida `/palco`. A cifra é apresentada como texto literal monoespaçado em um contêiner rolável; a transposição é calculada somente para a apresentação e não grava alterações na música. Playlists manuais mantêm a ordem e o tom personalizado dos itens; playlists estruturadas de Igreja são lidas pelo contrato específico existente. Referências sem música correspondente são indicadas e omitidas da fila tocável.
+
+`useAutoscroll.ts` avança a posição do contêiner com um único ciclo `requestAnimationFrame`, calculando o deslocamento pelo tempo decorrido e limitando intervalos longos para evitar saltos após inatividade. Pausa, reinício, fim da cifra e desmontagem cancelam o frame pendente. Velocidade e tamanho da fonte usam cache local separado por UID; posição de rolagem e transposição adicional são temporárias e não persistidas no Firestore. A validação automatizada cobre os controles e a apresentação. O usuário confirmou a inspeção visual e prática nos viewports 390×844, 844×390, 768×1024 e 1366×768.
+
+O autoscroll interrompe e reinicia quando a rota troca a faixa. O contêiner do palco usa `100dvh` quando suportado, com fallback para `100vh`.
 
 ## Modo Barzinho (T08)
 
