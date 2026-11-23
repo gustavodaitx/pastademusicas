@@ -19,11 +19,12 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 - [x] **T08 — Modo Barzinho (geração assistida com filtros e alternância)** `[CONCLUÍDA]`
 - [x] **T09 — Modo Palco e rolagem automática (autoscroll)** `[CONCLUÍDA]`
 - [ ] **T10 — Exportação PDF e TXT** `[PENDENTE]`
-- [ ] **T11 — Exportação DOCX e HTML** `[PENDENTE]`
-- [ ] **T12 — Integração Google Drive (OAuth Picker e escopos mínimos)** `[PENDENTE]`
-- [ ] **T13 — Patrocínio via Pix estático** `[PENDENTE]`
-- [ ] **T14 — PWA, acessibilidade (WCAG) e responsividade móvel** `[PENDENTE]`
-- [ ] **T15 — Testes finais automatizados, auditoria e documentação de entrega** `[PENDENTE]`
+- [ ] **T11 — Motor Musical e Capotraste Inteligente** `[PENDENTE]`
+- [ ] **T12 — Exportação DOCX e HTML** `[PENDENTE]`
+- [ ] **T13 — Integração Google Drive (OAuth Picker e escopos mínimos)** `[PENDENTE]`
+- [ ] **T14 — Patrocínio via Pix estático** `[PENDENTE]`
+- [ ] **T15 — PWA, acessibilidade (WCAG) e responsividade móvel** `[PENDENTE]`
+- [ ] **T16 — Testes finais automatizados, auditoria e documentação de entrega** `[PENDENTE]`
 
 ---
 
@@ -39,7 +40,7 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
   - [x] Criar branch de trabalho `task/t00-diagnostico-docs`.
   - [x] Redigir inventário de ferramentas e cotas gratuitas em `docs/LIMITES_E_CUSTOS.md`.
   - [x] Redigir diagnóstico e decisões técnicas em `docs/DECISOES_TECNICAS.md`.
-  - [x] Criar `TASK.md` com detalhamento das etapas T00–T15.
+  - [x] Criar `TASK.md` com detalhamento das etapas T00–T16.
   - [x] Criar `.gitignore` e `.env.example` protegendo credenciais e arquivos temporários.
 - **Testes Obrigatórios**:
   - [x] Validação da versão do Node.js (`v22.19.0`), npm (`10.9.3`) e Git (`2.45.1`).
@@ -145,7 +146,7 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
   - [x] Documentos antigos permanecem compatíveis e as regras mantêm isolamento por UID.
   - [x] Formatação e alinhamento das cifras preservados na visualização.
 
-Favoritos não fazem parte do escopo aprovado da T04. A transposição de acordes continua planejada como funcionalidade futura do T09.
+Favoritos não fazem parte do escopo aprovado da T04. A transposição básica em tempo real foi implementada na T09; o motor musical reutilizável, a identificação de tonalidades e o capotraste inteligente estão planejados para a T11.
 
 ---
 
@@ -294,7 +295,36 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição de acorde
 
 ---
 
-### [ ] T11 — Exportação DOCX e HTML
+### [ ] T11 — Motor Musical e Capotraste Inteligente
+- **Estado**: `PENDENTE — planejado; nenhuma implementação iniciada nesta atualização documental`
+- **Objetivo**: Desenvolver um motor musical reutilizável em TypeScript puro, executado localmente no navegador, capaz de interpretar acordes, transpor cifras, estimar tonalidades e recomendar posições de capotraste. A cifra original da Biblioteca permanece inalterada.
+- **Dependências**: T04, T06, T09 e T10. Deve ser iniciada somente após a conclusão da T10, salvo decisão futura expressa. Reutiliza a transposição já existente na T09.
+- **Subtarefas**:
+  - [ ] **T11.1 — Parser e representação de acordes**: interpretar notas naturais, sustenidos e bemóis; acordes maiores, menores, sétimas, extensões, suspensos, diminutos e aumentados; inversões e baixos alternativos. Produzir representação estruturada e preservar tokens não reconhecidos sem corromper a cifra.
+  - [ ] **T11.2 — Transposição reutilizável**: consolidar a implementação de `chordTransposer.ts`, manter compatibilidade com o Modo Palco e transpor entre tonalidades preservando letras, pontuação, espaços, quebras de linha e alinhamento. Nunca sobrescrever o conteúdo original da música.
+  - [ ] **T11.3 — Identificação de tonalidade**: analisar acordes, estimar tonalidades maiores e menores, expor confiança/ambiguidade e permitir resultado inconclusivo quando não houver evidência suficiente.
+  - [ ] **T11.4 — Capotraste inteligente**: calcular posições candidatas, apresentar tom de execução e formas correspondentes, aplicar critérios determinísticos e documentados de facilidade, aceitar limites configuráveis e informar quando não houver recomendação confiável. Manter transposição manual disponível.
+  - [ ] **T11.5 — Integração com Modo Palco**: expor transposição e recomendações na interface, preservar os controles atuais, recalcular ao trocar música ou tonalidade e não persistir resultados derivados como cifra original.
+  - [ ] **T11.6 — Documentação e limites**: documentar formatos de cifra suportados, heurísticas, incertezas da estimativa tonal e critérios de facilidade do capotraste. Não adicionar serviços externos, infraestrutura ou dependências sem justificativa técnica e aprovação.
+- **Testes Obrigatórios**:
+  - [ ] Testes unitários do parser para acordes válidos, inválidos e ambíguos, incluindo inversões e tokens não reconhecidos.
+  - [ ] Testes de transposição para diferentes tipos de acorde e preservação de letras, pontuação, espaços, quebras e alinhamento.
+  - [ ] Testes de tonalidades maiores, menores e ambíguas, incluindo confiança e resultados inconclusivos.
+  - [ ] Testes de capotraste cobrindo recomendações, limites configuráveis, desempates determinísticos e ausência de recomendação confiável.
+  - [ ] Casos sem acordes e com conteúdo ambíguo; comprovar que a cifra original permanece integralmente inalterada.
+  - [ ] Testes de integração com Modo Palco e regressão da transposição e do autoscroll atuais.
+  - [ ] Executar e registrar `npm run typecheck`, `npm run lint`, `npm test` e `npm run build`.
+- **Critérios de Aceite**:
+  - O núcleo funciona independentemente de React e Firebase, em TypeScript strict e com processamento local.
+  - A transposição atual continua funcionando e cifras não reconhecidas não são corrompidas.
+  - A análise tonal explicita ambiguidade ou inconclusão em vez de inventar um tom.
+  - Recomendações de capotraste são reproduzíveis, documentadas e testadas.
+  - A cifra original permanece inalterada; resultados derivados são apenas em memória/apresentação.
+  - O Modo Palco mantém seus recursos existentes e todos os testes e verificações exigidos são executados, com resultados registrados.
+
+---
+
+### [ ] T12 — Exportação DOCX e HTML
 - **Estado**: `PENDENTE`
 - **Objetivo**: Adicionar exportação para documentos Microsoft Word (`.docx`) usando biblioteca open-source client-side e arquivos HTML avulsos com estilização CSS embutida.
 - **Dependências**: T10.
@@ -309,7 +339,7 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição de acorde
 
 ---
 
-### [ ] T12 — Integração Google Drive (OAuth Picker e Escopos Mínimos)
+### [ ] T13 — Integração Google Drive (OAuth Picker e Escopos Mínimos)
 - **Estado**: `PENDENTE`
 - **Objetivo**: Integrar com a Google Drive API e Google Picker permitindo ao usuário selecionar e importar arquivos autorizados de sua própria conta, sem solicitar permissões desnecessárias e sem armazenar tokens.
 - **Dependências**: T05.
@@ -326,7 +356,7 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição de acorde
 
 ---
 
-### [ ] T13 — Patrocínio via Pix Estático
+### [ ] T14 — Patrocínio via Pix Estático
 - **Estado**: `PENDENTE`
 - **Objetivo**: Disponibilizar tela e modais de apoio voluntário com QR Code Pix estático (BR Code) e chave copia-e-cola oficial, informando claramente a natureza voluntária sem gateways de pagamento pagos.
 - **Dependências**: T01.
@@ -344,10 +374,10 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição de acorde
 
 ---
 
-### [ ] T14 — PWA, Acessibilidade (WCAG) e Responsividade Móvel
+### [ ] T15 — PWA, Acessibilidade (WCAG) e Responsividade Móvel
 - **Estado**: `PENDENTE`
 - **Objetivo**: Configurar a aplicação como Progressive Web App (PWA) instalável, com funcionamento offline para cifras já visualizadas, auditoria de acessibilidade (WCAG AA), foco visível por teclado e refinamento responsivo.
-- **Dependências**: T01 a T13.
+- **Dependências**: T01 a T14.
 - **Subtarefas**:
   - [ ] Configurar `manifest.webmanifest`, ícones SVG/PNG e meta tags PWA.
   - [ ] Configurar Service Worker com cache de recursos estáticos e fontes.
@@ -362,10 +392,10 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição de acorde
 
 ---
 
-### [ ] T15 — Testes Finais Automatizados, Auditoria e Documentação de Entrega
+### [ ] T16 — Testes Finais Automatizados, Auditoria e Documentação de Entrega
 - **Estado**: `PENDENTE`
 - **Objetivo**: Executar toda a esteira de testes automatizados (`lint`, `typecheck`, `test`, `build`), auditar o cumprimento da regra inegociável de custo zero e consolidar a documentação completa de implantação.
-- **Dependências**: T00 a T14.
+- **Dependências**: T00 a T15.
 - **Subtarefas**:
   - [ ] Executar bateria completa de testes unitários e de integração.
   - [ ] Verificar ausência de vulnerabilidades em dependências (`npm audit`).

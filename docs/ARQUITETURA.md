@@ -53,6 +53,12 @@ A interface não se conecta automaticamente ao emulador. O Modo Igreja abre e ed
 
 O autoscroll interrompe e reinicia quando a rota troca a faixa. O contêiner do palco usa `100dvh` quando suportado, com fallback para `100vh`.
 
+## Motor musical planejado (T11)
+
+A T11 ainda não está implementada. O código existente em `src/features/stage-mode/chordTransposer.ts` já reconhece tokens de acordes por padrões textuais, transpõe linhas dedicadas e acordes entre colchetes e é usado pelo Modo Palco. Essa implementação não é ainda um motor musical reutilizável com acordes estruturados, análise tonal ou recomendação de capotraste.
+
+O plano da T11 é extrair um núcleo TypeScript independente de React, Firebase e persistência, reutilizando a transposição existente e mantendo sua compatibilidade. A análise produzirá resultados derivados em memória: parser de acordes, estimativa de tonalidade com confiança/ambiguidade e candidatos de capotraste com critérios determinísticos documentados. A integração ao Modo Palco exibirá esses resultados sem substituir nem gravar sobre `musicas/{musicaId}.conteudoCifrado`. Tokens não reconhecidos devem permanecer intactos. O processamento será local, sem APIs externas; detalhes e critérios de aceite estão em `TASK.md`.
+
 ## Modo Barzinho (T08)
 
 `BarModePage.tsx` implementa o gerador inteligente de repertório para apresentações e shows em barzinhos:

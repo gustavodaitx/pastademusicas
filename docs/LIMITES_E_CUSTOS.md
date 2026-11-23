@@ -63,3 +63,10 @@ Este projeto adota como diretriz estrutural a **ausência total de custos obriga
 - Reordenação e exclusão com 400 itens podem realizar aproximadamente 802 leituras cada (documentos observados e nova leitura transacional) e até 401 gravações. Operações em listas menores escalam com a quantidade de itens; recarregar detalhes/listagens também consome leituras. Os valores são estimativas de operações da aplicação, sem contar recargas do usuário nem efeitos da camada de regras. Consultas não são paginadas.
 - O arraste usa HTML5 nativo e o suporte pode variar em navegadores móveis. Botões de subir/descer e as setas do teclado são alternativas acessíveis.
 - Excluir uma playlist remove seus itens, não as músicas. Excluir uma música da Biblioteca mantém referências existentes; elas aparecem como indisponíveis e podem ser removidas manualmente. A duplicação depende de que todas as referências ainda apontem para músicas existentes; falhas de persistência acionam tentativa de limpeza compensatória, que também pode falhar e deve ser reportada.
+
+## 6. Motor musical planejado (T11)
+
+- A T11 prevê processamento local no navegador, em TypeScript, sem APIs externas, backend, Cloud Functions ou infraestrutura paga. A transposição já existente no Modo Palco será reutilizada; parser estruturado, análise tonal e cálculo de capotraste ainda não foram implementados.
+- Não há dependência nova aprovada para o motor. Qualquer proposta de biblioteca externa precisa de justificativa técnica e aprovação antes de ser adicionada; a abordagem planejada é manter o núcleo independente de dependências externas.
+- A cifra derivada para transposição/capotraste existe somente em memória/apresentação. A cifra original permanece no documento Firestore sem alteração, evitando gravações ou custo adicional de persistência para essas operações.
+- As heurísticas de identificação de tonalidade e facilidade de execução têm limites: podem resultar em ambiguidade ou falta de recomendação confiável. A T11 deve expor essa incerteza, documentar os critérios e cobrir os casos em testes; não deve inventar resultados.
