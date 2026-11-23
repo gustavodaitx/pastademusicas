@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AlertCircle, Filter, Mic2, Music as MusicIcon, Plus, Search, Tag, Trash2, X } from 'lucide-react';
@@ -96,6 +96,7 @@ export const LibraryPage = () => {
   const [viewingMusic, setViewingMusic] = useState<MusicRecord | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadMusics = useCallback(async () => {
@@ -212,6 +213,8 @@ export const LibraryPage = () => {
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -230,10 +233,11 @@ export const LibraryPage = () => {
       setEditingMusic(null);
       setForm(emptyForm);
       setFormOpen(false);
-      await loadMusics();
+      void loadMusics();
     } catch (saveError) {
       setError(errorMessage(saveError));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -326,7 +330,7 @@ export const LibraryPage = () => {
               <button type="button" onClick={() => void handleDelete(music)} disabled={deletingId === music.id} aria-label={`Excluir ${music.titulo}`} className="p-2 text-slate-400 hover:text-rose-500 disabled:opacity-50"><Trash2 className="w-4 h-4" /></button>
             </div>
             <div className="flex items-center gap-2">
-              <Link to="/palco" className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400"><Mic2 className="w-3.5 h-3.5" /><span>Palco</span></Link>
+              <Link to={`/palco?musicaId=${music.id}`} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400"><Mic2 className="w-3.5 h-3.5" /><span>Palco</span></Link>
               <button type="button" onClick={() => void openDetails(music.id)} disabled={detailLoading} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-300">Ver Cifra</button>
             </div>
           </div>
@@ -335,10 +339,11 @@ export const LibraryPage = () => {
 
       {detailLoading && <div role="status" className="fixed inset-0 z-40 grid place-items-center bg-black/30"><div className="rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl">Carregando música…</div></div>}
 
-      {formOpen && <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) closeForm(); }}>
-        <section role="dialog" aria-modal="true" aria-labelledby="music-form-title" className="my-8 w-full max-w-2xl rounded-2xl bg-white dark:bg-slate-900 p-5 sm:p-7 shadow-2xl">
+      {formOpen && <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/50 p-3 sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) closeForm(); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="music-form-title" className="mx-auto my-3 flex max-h-[calc(100vh-1.5rem)] supports-[height:100dvh]:max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-900 sm:p-7">
           <div className="flex items-center justify-between gap-3"><div><h2 id="music-form-title" className="text-lg font-bold text-slate-900 dark:text-slate-100">{editingMusic ? 'Editar música' : 'Nova música'}</h2>{importDraft && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Conteúdo importado de {importDraft.fileName}; revise os dados antes de salvar.</p>}</div><button type="button" onClick={closeForm} disabled={saving} aria-label={importDraft ? 'Voltar à prévia' : 'Fechar'} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-5 h-5" /></button></div>
-          <form onSubmit={(event) => void handleSave(event)} className="mt-5 space-y-4">
+          <form onSubmit={(event) => void handleSave(event)} className="mt-4 flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1">
             {error && <div role="alert" className="p-3 rounded-xl border border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200 text-sm">{error}</div>}
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Título <span className="text-rose-500">*</span><input required maxLength={200} value={form.titulo} onChange={(event) => setForm({ ...form, titulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" /></label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -350,7 +355,8 @@ export const LibraryPage = () => {
             </div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Observações <span className="text-xs font-normal text-slate-500">opcional, até 5.000 caracteres</span><textarea maxLength={5000} rows={4} value={form.observacoes} onChange={(event) => setForm({ ...form, observacoes: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" /></label>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Conteúdo/cifra <span className="text-rose-500">*</span><textarea required maxLength={800000} rows={12} value={form.conteudoCifrado} onChange={(event) => setForm({ ...form, conteudoCifrado: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-mono" /></label>
-            <div className="flex justify-end gap-2 pt-2"><button type="button" disabled={saving} onClick={closeForm} className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">{importDraft ? 'Voltar à prévia' : 'Cancelar'}</button><button type="submit" disabled={saving} className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-sm font-semibold text-white">{saving ? 'Salvando…' : 'Salvar música'}</button></div>
+            </div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-slate-200 bg-white pt-4 dark:border-slate-800 dark:bg-slate-900"><button type="button" disabled={saving} onClick={closeForm} className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">{importDraft ? 'Voltar à prévia' : 'Cancelar'}</button><button type="submit" disabled={saving} className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-sm font-semibold text-white">{saving ? 'Salvando…' : 'Salvar música'}</button></div>
           </form>
         </section>
       </div>}

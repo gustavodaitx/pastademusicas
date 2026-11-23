@@ -97,9 +97,34 @@ export async function extractDocxText(file: File): Promise<string> {
   const arrayBuffer = await readFile(file);
 
   try {
-    const { default: mammoth } = await import('mammoth/mammoth.browser.js');
-    const result = await mammoth.extractRawText({ arrayBuffer });
-    return result.value;
+    if (typeof Worker === 'undefined') {
+      const { default: mammoth } = await import('mammoth/mammoth.browser.js');
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      return result.value;
+    }
+
+    return await new Promise<string>((resolve, reject) => {
+      const worker = new Worker(new URL('./docxExtraction.worker.ts', import.meta.url), { type: 'module' });
+      const finish = (callback: () => void) => {
+        worker.terminate();
+        callback();
+      };
+
+      worker.onmessage = (event: MessageEvent<{ text?: string; error?: string }>) => {
+        const { text, error } = event.data;
+        if (typeof text === 'string') {
+          finish(() => resolve(text));
+        } else {
+          finish(() => reject(new Error(error ?? 'Falha ao extrair o documento DOCX.')));
+        }
+      };
+      worker.onerror = (event) => {
+        event.preventDefault();
+        finish(() => reject(new Error('Falha no processamento do documento DOCX.')));
+      };
+      worker.onmessageerror = () => finish(() => reject(new Error('Resposta inválida do processamento DOCX.')));
+      worker.postMessage({ arrayBuffer }, [arrayBuffer]);
+    });
   } catch (error) {
     throw new FileExtractionError('Não foi possível extrair texto do documento DOCX.', 'invalid-document', error);
   }

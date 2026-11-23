@@ -147,6 +147,10 @@ function asItem(snapshot: QueryDocumentSnapshot): PlaylistItemRecord {
   return { id: snapshot.id, ...snapshot.data() } as PlaylistItemRecord;
 }
 
+function timestampMillis(value: unknown): number | null {
+  return value instanceof Timestamp ? value.toMillis() : null;
+}
+
 function validatePlaylistItem(item: PlaylistItemRecord): PlaylistItemRecord {
   if (item.musicaId !== item.id) {
     throw new PlaylistRepositoryError('A playlist contém uma referência de música inválida.', 'invalid-music-reference');
@@ -589,8 +593,19 @@ export function createPlaylistRepository(firestore: Firestore | null, getUid: ()
 
     async listPlaylists(): Promise<PlaylistRecord[]> {
       try {
-        const result = await getDocs(query(userPlaylistCollection(), orderBy('createdAt', 'desc')));
-        return result.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }) as PlaylistRecord);
+        const result = await getDocs(userPlaylistCollection());
+        const playlists = result.docs.map((snapshot) => ({
+          id: snapshot.id,
+          ...snapshot.data({ serverTimestamps: 'estimate' }),
+        }) as PlaylistRecord);
+
+        return playlists.sort((left, right) => {
+          const leftCreatedAt = timestampMillis(left.createdAt);
+          const rightCreatedAt = timestampMillis(right.createdAt);
+          if (leftCreatedAt === null) return rightCreatedAt === null ? 0 : 1;
+          if (rightCreatedAt === null) return -1;
+          return rightCreatedAt - leftCreatedAt;
+        });
       } catch (error) {
         throw wrapError(error);
       }

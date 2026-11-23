@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Timestamp } from 'firebase/firestore';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,9 +54,9 @@ const detailWithSong: PlaylistDetails = {
   ...playlist,
   itens: [{ id: song.id, musicaId: song.id, posicao: 1, momento: 'Entrada', tomPersonalizado: null }],
 };
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((complete) => { resolve = complete; });
+const deferred = <T = void,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
   return { promise, resolve };
 };
 const renderPage = () => render(<MemoryRouter><PlaylistsPage /></MemoryRouter>);
@@ -92,17 +92,113 @@ describe('PlaylistsPage', () => {
     expect(screen.queryByText('Você ainda não tem playlists')).not.toBeInTheDocument();
   });
 
-  it('creates only after explicit form submission and opens the saved playlist', async () => {
-    renderPage();
+  it('closes the create form, refreshes the list once, and keeps the new playlist after reload', async () => {
+    const createdWhileTimestampResolves = {
+      ...playlist,
+      nome: 'Ensaio de sábado',
+      updatedAt: null,
+    } as unknown as PlaylistRecord;
+    mocks.listPlaylists
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([createdWhileTimestampResolves])
+      .mockResolvedValue([createdWhileTimestampResolves]);
+    const page = renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Criar playlist' }));
     expect(mocks.createPlaylist).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText(/Nome/), { target: { value: 'Ensaio de sábado' } });
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Criar playlist' }));
 
     await waitFor(() => expect(mocks.createPlaylist).toHaveBeenCalledWith({ nome: 'Ensaio de sábado', tipo: 'manual' }));
-    expect(await screen.findByRole('dialog', { name: 'Repertório real' })).toBeInTheDocument();
-    expect(screen.getByText('Esta playlist ainda está vazia.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByText('Ensaio de sábado')).toBeInTheDocument();
+    expect(screen.getByText('Data não disponível')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Playlist criada.');
+    expect(mocks.listPlaylists).toHaveBeenCalledTimes(2);
+    expect(mocks.getPlaylistById).not.toHaveBeenCalled();
+
+    page.unmount();
+    renderPage();
+    expect(await screen.findByText('Ensaio de sábado')).toBeInTheDocument();
+    expect(screen.getAllByText('Ensaio de sábado')).toHaveLength(1);
   });
+
+  it('prevents duplicate create submissions while the repository call is pending', async () => {
+    const created: PlaylistRecord = { ...playlist, nome: 'Criação única' };
+    mocks.listPlaylists.mockResolvedValueOnce([]).mockResolvedValueOnce([created]);
+    let resolveCreate!: (id: string) => void;
+    mocks.createPlaylist.mockImplementationOnce(() => new Promise<string>((resolve) => {
+      resolveCreate = resolve;
+    }));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar playlist' }));
+    fireEvent.change(screen.getByLabelText(/Nome/), { target: { value: 'Criação única' } });
+    const createDialog = screen.getByRole('dialog');
+    const formElement = createDialog.querySelector('form');
+    expect(formElement).not.toBeNull();
+    fireEvent.submit(formElement!);
+    fireEvent.submit(formElement!);
+
+    expect(mocks.createPlaylist).toHaveBeenCalledTimes(1);
+    expect(within(createDialog).getByRole('button', { name: 'Salvando…' })).toBeDisabled();
+    resolveCreate('playlist-1');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText('Criação única')).toBeInTheDocument();
+    expect(mocks.listPlaylists).toHaveBeenCalledTimes(2);
+  });
+
+  it('closes the edit form after confirmed save without waiting for the list refresh', async () => {
+    const refresh = deferred<PlaylistRecord[]>();
+    mocks.listPlaylists.mockResolvedValueOnce([playlist]).mockReturnValueOnce(refresh.promise);
+    renderPage();
+    await screen.findByText('Repertório real');
+    fireEvent.click(screen.getByRole('button', { name: 'Editar Repertório real' }));
+    fireEvent.change(screen.getByLabelText(/Nome/), { target: { value: 'Repertório atualizado' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+
+    await waitFor(() => expect(mocks.updatePlaylist).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByText('Playlist atualizada.')).toBeInTheDocument();
+    await act(async () => refresh.resolve([playlist]));
+  });
+
+  it('keeps the create form open and shows an error when saving fails', async () => {
+    mocks.createPlaylist.mockRejectedValueOnce(new Error('offline'));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar playlist' }));
+    fireEvent.change(screen.getByLabelText(/Nome/), { target: { value: 'Não salvar' } });
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Criar playlist' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Criar playlist' });
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Não foi possível concluir a operação. Verifique sua conexão e tente novamente.',
+    );
+    expect(screen.getByLabelText(/Nome/)).toHaveValue('Não salvar');
+    expect(mocks.listPlaylists).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['null', 'missing'] as const)(
+    'renders an older playlist when updatedAt is %s', async (timestampState) => {
+      const legacyRecord = timestampState === 'null'
+        ? { ...playlist, id: `legacy-${timestampState}`, nome: 'Playlist antiga', updatedAt: null }
+        : Object.fromEntries(Object.entries({
+          ...playlist,
+          id: `legacy-${timestampState}`,
+          nome: 'Playlist antiga',
+        }).filter(([field]) => field !== 'updatedAt'));
+      mocks.listPlaylists.mockResolvedValue([legacyRecord as unknown as PlaylistRecord, playlist]);
+
+      renderPage();
+
+      expect(await screen.findByText('Playlist antiga')).toBeInTheDocument();
+      expect(screen.getAllByText('Data não disponível')).toHaveLength(1);
+      expect(screen.getByText('Repertório real')).toBeInTheDocument();
+      expect(screen.getAllByText(timestamp.toDate().toLocaleDateString('pt-BR').trim()).length).toBeGreaterThan(0);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    },
+  );
 
   it('adds an existing library song from playlist details', async () => {
     mocks.listPlaylists.mockResolvedValue([playlist]);

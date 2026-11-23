@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Timestamp } from 'firebase/firestore';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,6 +46,11 @@ const music: MusicRecord = {
 };
 
 const renderPage = () => render(<MemoryRouter><LibraryPage /></MemoryRouter>);
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
+};
 
 describe('LibraryPage', () => {
   beforeEach(() => {
@@ -160,6 +165,22 @@ describe('LibraryPage', () => {
       origemTipo: 'manual',
     })));
     expect(await screen.findByRole('status')).toHaveTextContent('Música salva na sua biblioteca.');
+  });
+
+  it('closes the form after confirmed save without waiting for the list refresh', async () => {
+    const refresh = deferred<MusicRecord[]>();
+    mocks.listMusics.mockResolvedValueOnce([]).mockReturnValueOnce(refresh.promise);
+    renderPage();
+    await screen.findByText('Sua biblioteca está vazia');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Nova Música' })[0]);
+    fireEvent.change(screen.getByLabelText(/Título/), { target: { value: 'Salva antes da recarga' } });
+    fireEvent.change(screen.getByLabelText(/Conteúdo\/cifra/), { target: { value: 'C\nLetra' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar música' }));
+
+    await waitFor(() => expect(mocks.createMusic).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByText('Música salva na sua biblioteca.')).toBeInTheDocument();
+    await act(async () => refresh.resolve([]));
   });
 
   it('updates an existing saved song from the edit form', async () => {

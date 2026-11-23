@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { Timestamp } from 'firebase/firestore';
 import { AlertCircle, ArrowDown, ArrowRight, ArrowUp, Beer, Calendar, Church, Copy, GripVertical, ListMusic, Music2, Plus, Trash2, X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { listMusics, MusicRepositoryError } from '../../services/musicRepository';
@@ -30,6 +31,12 @@ function errorMessage(error: unknown): string {
   return 'Não foi possível concluir a operação. Verifique sua conexão e tente novamente.';
 }
 
+function formatPlaylistDate(value: unknown): string {
+  if (!(value instanceof Timestamp)) return 'Data não disponível';
+  const date = value.toDate();
+  return Number.isNaN(date.getTime()) ? 'Data não disponível' : date.toLocaleDateString('pt-BR');
+}
+
 function TypeBadge({ type }: { type: PlaylistType }) {
   if (type === 'igreja') return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"><Church className="w-3 h-3" />Modo Igreja</span>;
   if (type === 'barzinho') return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"><Beer className="w-3 h-3" />Modo Barzinho</span>;
@@ -46,6 +53,7 @@ export const PlaylistsPage = () => {
   const [editingPlaylist, setEditingPlaylist] = useState<PlaylistRecord | null>(null);
   const [form, setForm] = useState<PlaylistForm>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState<PlaylistDetails | null>(null);
   const [playlistSongs, setPlaylistSongs] = useState<MusicRecord[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -128,27 +136,26 @@ export const PlaylistsPage = () => {
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     try {
       if (editingPlaylist) {
         await updatePlaylist(editingPlaylist.id, form);
         setNotice('Playlist atualizada.');
-        await loadPlaylists();
       } else {
-        const id = await createPlaylist(form);
+        await createPlaylist(form);
         setNotice('Playlist criada.');
-        await loadPlaylists();
-        setFormOpen(false);
-        setEditingPlaylist(null);
-        await openDetails(id);
-        return;
       }
       setFormOpen(false);
       setEditingPlaylist(null);
+      setForm(emptyForm);
+      void loadPlaylists();
     } catch (saveError) {
       setError(errorMessage(saveError));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -322,12 +329,12 @@ export const PlaylistsPage = () => {
       {!loading && playlists.length > 0 && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {playlists.map((playlist) => <article key={playlist.id} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-brand-300 dark:hover:border-brand-700 shadow-sm transition-all flex flex-col justify-between group">
           <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2"><TypeBadge type={playlist.tipo} /><span className="text-xs text-slate-400 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{playlist.updatedAt.toDate().toLocaleDateString('pt-BR')}</span></div>
+            <div className="flex items-center justify-between gap-2"><TypeBadge type={playlist.tipo} /><span className="text-xs text-slate-400 flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{formatPlaylistDate(playlist.updatedAt)}</span></div>
             <h2 className="font-bold text-base text-slate-900 dark:text-slate-100 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{playlist.nome}</h2>
             <p className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><Music2 className="w-4 h-4 text-brand-500" />Abra para ver e organizar as músicas.</p>
           </div>
           <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <Link to="/palco" className="text-xs font-semibold text-brand-600 dark:text-brand-400 group-hover:translate-x-1 transition-transform flex items-center gap-1"><span>Abrir no Palco</span><ArrowRight className="w-3.5 h-3.5" /></Link>
+            <Link to={`/palco?playlistId=${playlist.id}`} className="text-xs font-semibold text-brand-600 dark:text-brand-400 group-hover:translate-x-1 transition-transform flex items-center gap-1"><span>Abrir no Palco</span><ArrowRight className="w-3.5 h-3.5" /></Link>
             <div className="flex items-center gap-1"><button type="button" onClick={() => openEdit(playlist)} aria-label={`Editar ${playlist.nome}`} className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Editar</button><button type="button" onClick={() => void handleDuplicate(playlist)} disabled={busy || duplicatingPlaylistId !== null} aria-label={`Duplicar ${playlist.nome}`} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"><Copy className="w-3.5 h-3.5" /><span>{duplicatingPlaylistId === playlist.id ? 'Duplicando…' : 'Duplicar'}</span></button><button type="button" onClick={() => void openDetails(playlist.id)} aria-label={`Abrir ${playlist.nome}`} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white">Abrir</button></div>
           </div>
         </article>)}
