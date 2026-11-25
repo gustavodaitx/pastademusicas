@@ -425,9 +425,9 @@ Aceite: sem duplicatas evitáveis e sem conteúdo inventado.
 [ ] T09 — Modo palco e rolagem automática
 Tema escuro, tamanho de fonte, velocidade, pausar/retomar.
 Aceite: controles funcionam em desktop e celular.
-[ ] T10 — Exportação PDF e TXT
-Exportar música e playlist.
-Aceite: ordem, títulos, tons e quebras de linha corretos.
+[ ] T10 — Exportação PDF e TXT — validação automatizada executada; inspeção visual ainda pendente (detalhes em `TASK.md` e `docs/ARQUITETURA.md`).
+Exportar música e playlist localmente, com opção de metadados; PDF A4 sempre em orientação retrato. O PDF prefere 14 pt e não reduz a cifra abaixo de 12 pt; linhas identificadas como acordes usam fonte monoespaçada em negrito azul-escuro, e letras usam fonte normal preta. Painéis preservam os mesmos limites de coluna para todas as linhas.
+Aceite automatizado: ordem, estrutura textual, acentos, alinhamento de tokens, identificação de acordes, dimensões, margens e paginação cobertos. A inspeção visual de legibilidade e compatibilidade em dispositivos ainda é necessária.
 [ ] T11 — Exportação DOCX e HTML
 Implementar e testar compatibilidade.
 Aceite: arquivos abrem e conteúdo está legível.

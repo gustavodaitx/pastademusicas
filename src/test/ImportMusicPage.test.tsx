@@ -74,6 +74,8 @@ describe('ImportMusicPage', () => {
     expect(await screen.findByLabelText('Texto extraído editável')).toHaveValue('  C\tG\nCanção  ');
     expect(screen.getByText(name)).toBeInTheDocument();
     expect(mocks.extractAndValidateFile).toHaveBeenCalledWith(file);
+    if (name.endsWith('.docx')) expect(screen.getByRole('note')).toHaveTextContent('tabs usam paradas fixas de quatro colunas');
+    if (name.endsWith('.pdf')) expect(screen.getByRole('note')).toHaveTextContent('O alinhamento é estimado pelas posições dos elementos');
     expect(screen.getByRole('status')).toHaveTextContent('Nenhuma música foi salva.');
   });
 

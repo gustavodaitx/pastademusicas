@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImportMusicPage } from '../features/import-music/ImportMusicPage';
@@ -106,7 +106,7 @@ describe('integração da importação com o cadastro da Biblioteca', () => {
       origemTipo: 'upload_local',
       arquivoNome: 'Canção.docx',
       driveFileId: null,
-    })));
+    }), expect.anything()));
     expect(await screen.findByRole('status')).toHaveTextContent('Música importada e salva na sua biblioteca.');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText('Biblioteca de Músicas')).toBeInTheDocument();
@@ -136,6 +136,47 @@ describe('integração da importação com o cadastro da Biblioteca', () => {
     expect(actions).toHaveTextContent('Voltar à prévia');
     expect(actions).toHaveTextContent('Salvar música');
     expect(screen.getByLabelText(/Conteúdo\/cifra/)).toHaveValue('Conteúdo importado');
+  });
+
+  it('keeps the imported form responsive during save and ignores duplicate submissions', async () => {
+    let resolveSave: (id: string) => void = () => undefined;
+    mocks.createMusic.mockReturnValueOnce(new Promise<string>((resolve) => { resolveSave = resolve; }));
+    const content = '  Em\tC9\nCan\u00e7\u00e3o e m\u00fasica';
+    await prepareImportedDraft(content);
+    fireEvent.change(screen.getByLabelText(/T\u00edtulo/), { target: { value: 'Cifra alinhada' } });
+    const form = screen.getByRole('dialog', { name: 'Nova m\u00fasica' }).querySelector('form');
+    if (!form) throw new Error('Import form was not rendered');
+
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    expect(mocks.createMusic).toHaveBeenCalledOnce();
+    expect(form).toHaveAttribute('aria-busy', 'true');
+    expect(mocks.createMusic).toHaveBeenCalledWith(expect.objectContaining({ conteudoCifrado: content, origemTipo: 'upload_local' }), expect.anything());
+    expect(screen.getByRole('button', { name: /Salvando/ })).toBeDisabled();
+    expect(screen.getByLabelText(/Conte\u00fado\/cifra/)).toHaveValue(content);
+    expect(screen.getByLabelText(/T\u00edtulo/)).toHaveValue('Cifra alinhada');
+
+    resolveSave('imported-once');
+    expect(await screen.findByText('M\u00fasica importada e salva na sua biblioteca.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes after persistence while the library refresh is still pending and does not reopen from route state', async () => {
+    let resolveRefresh: (songs: never[]) => void = () => undefined;
+    mocks.listMusics.mockResolvedValueOnce([]).mockReturnValueOnce(new Promise((resolve) => { resolveRefresh = resolve; }));
+    await prepareImportedDraft('C\nConteúdo importado');
+    fireEvent.change(screen.getByLabelText(/Título/), { target: { value: 'Missa de Emaús' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar música' }));
+
+    expect(await screen.findByText('Música importada e salva na sua biblioteca.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Salvando/ })).not.toBeInTheDocument();
+    expect(mocks.listMusics).toHaveBeenCalledTimes(2);
+
+    fireEvent.change(screen.getByLabelText('Pesquisar músicas'), { target: { value: 'Emaús' } });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await act(async () => { resolveRefresh([]); });
   });
 
   it('keeps the imported content in the form and shows a persistence error', async () => {

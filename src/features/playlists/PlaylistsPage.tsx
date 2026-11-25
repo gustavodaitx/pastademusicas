@@ -21,6 +21,8 @@ import {
   updatePlaylist,
 } from '../../services/playlistRepository';
 import type { PlaylistDetails, PlaylistRecord } from '../../services/playlistRepository';
+import { ExportActions } from '../export/ExportActions';
+import type { ExportPlaylist } from '../export/exportFormatters';
 
 type PlaylistForm = { nome: string; tipo: PlaylistType };
 
@@ -66,6 +68,7 @@ export const PlaylistsPage = () => {
   const [tomError, setTomError] = useState<string | null>(null);
   const [tomNotice, setTomNotice] = useState<string | null>(null);
   const [draggedMusicId, setDraggedMusicId] = useState<string | null>(null);
+  const [includeExportMetadata, setIncludeExportMetadata] = useState(true);
 
   const loadPlaylists = useCallback(async () => {
     if (authLoading) return;
@@ -92,6 +95,14 @@ export const PlaylistsPage = () => {
   const musicById = useMemo(() => new Map(playlistSongs.map((music) => [music.id, music])), [playlistSongs]);
   const playlistMusicIds = useMemo(() => new Set(selectedPlaylist?.itens.map((item) => item.musicaId) ?? []), [selectedPlaylist]);
   const availableSongs = useMemo(() => playlistSongs.filter((music) => !playlistMusicIds.has(music.id)), [playlistSongs, playlistMusicIds]);
+  const selectedExportPlaylist: ExportPlaylist | undefined = selectedPlaylist ? {
+    nome: selectedPlaylist.nome,
+    itens: selectedPlaylist.itens.map((item) => ({
+      music: musicById.get(item.musicaId) ?? null,
+      momento: item.momento,
+      tomPersonalizado: item.tomPersonalizado,
+    })),
+  } : undefined;
 
   const openCreate = () => {
     setEditingPlaylist(null);
@@ -360,6 +371,7 @@ export const PlaylistsPage = () => {
           {error && <p role="alert" className="mt-4 rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">{error}</p>}
           {tomError && <p role="alert" className="mt-4 rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">{tomError}</p>}
           {tomNotice && <p role="status" className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">{tomNotice}</p>}
+          {selectedExportPlaylist && <div className="mt-4 rounded-xl border border-slate-200 p-3 dark:border-slate-800"><p className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Exportar playlist</p><ExportActions playlist={selectedExportPlaylist} includeMetadata={includeExportMetadata} onMetadataChange={setIncludeExportMetadata} /></div>}
           <p id="playlist-reorder-instructions" className="sr-only">Arraste o botão de alça para reordenar. Pelo teclado, use as setas para cima e para baixo. Os botões de mover também estão disponíveis.</p>
           {busy && <p role="status" aria-live="polite" className="mt-4 text-sm text-brand-700 dark:text-brand-300">Salvando alterações na playlist…</p>}
           <div className="mt-5">

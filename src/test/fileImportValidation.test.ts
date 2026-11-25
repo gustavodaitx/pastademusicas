@@ -39,6 +39,7 @@ function setPdfText(text: string): void {
     promise: Promise.resolve({
       numPages: 1,
       getPage: async () => ({
+        getViewport: () => ({ width: 612 }),
         getTextContent: async () => ({
           items: text ? [{
             str: text,
@@ -133,7 +134,7 @@ describe('extractAndValidateFile', () => {
     const bytes = new Uint8Array(readFileSync(resolve(process.cwd(), 'src', 'test', 'fixtures', 'song.docx')));
 
     await expect(extractAndValidateFile(fileWithBytes('letra.docx', bytes)))
-      .resolves.toBe('  C  \n\nCanção & coração\n\n');
+      .resolves.toBe('  C  \nCanção & coração\n');
   });
 
   it('extracts and validates PDF text', async () => {
