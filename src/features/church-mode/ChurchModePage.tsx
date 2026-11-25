@@ -15,6 +15,8 @@ import {
 import type { PlaylistRecord } from '../../services/playlistRepository';
 import { MOMENTOS_IGREJA } from '../../types/firestore';
 import type { MomentoIgrejaId } from '../../types/firestore';
+import { ExportActions } from '../export/ExportActions';
+import type { ExportPlaylist } from '../export/exportFormatters';
 
 export const LITURGICAL_MOMENTS = MOMENTOS_IGREJA.map((moment, index) => ({
   ...moment,
@@ -65,8 +67,17 @@ export const ChurchModePage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [includeExportMetadata, setIncludeExportMetadata] = useState(true);
 
   const catalogById = useMemo(() => new Map(catalog.map((music) => [music.id, music])), [catalog]);
+  const churchExport: ExportPlaylist = useMemo(() => ({
+    nome: celebrationName,
+    itens: MOMENTOS_IGREJA.map(({ id, nome }) => ({
+      music: slots[id].musicId ? catalogById.get(slots[id].musicId!) ?? null : null,
+      momento: nome,
+      tomPersonalizado: slots[id].tom,
+    })),
+  }), [celebrationName, catalogById, slots]);
 
   const loadCatalog = useCallback(async () => {
     if (authLoading) return;
@@ -314,6 +325,10 @@ export const ChurchModePage: React.FC = () => {
         <Save className="w-4 h-4" /> {saving ? 'Salvando...' : currentPlaylistId ? 'Atualizar Playlist Litúrgica' : 'Salvar como Nova Playlist'}
       </button>
       </form>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <p className="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">Exportar playlist litúrgica</p>
+        <ExportActions playlist={churchExport} includeMetadata={includeExportMetadata} onMetadataChange={setIncludeExportMetadata} />
+      </div>
 
       {/* Acceptance note */}
       <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">

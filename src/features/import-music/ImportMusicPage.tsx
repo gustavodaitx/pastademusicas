@@ -243,6 +243,16 @@ export const ImportMusicPage = () => {
                 spellCheck={false}
                 className="w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 font-mono text-sm leading-relaxed text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
+              {selectedFormat === 'docx' && (
+                <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                  Parágrafos e tabelas são lidos na ordem estrutural; tabelas são separadas por coluna e tabs usam paradas fixas de quatro colunas; sequências de espaços em linhas de acordes são comprimidas em 0,65 e um parágrafo vazio entre acorde e letra é removido. Fontes, recuos e tab stops personalizados não são reproduzidos; confira o alinhamento antes de continuar.
+                </p>
+              )}
+              {selectedFormat === 'pdf' && (
+                <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                  O PDF não armazena espaços como texto corrido. O alinhamento é estimado pelas posições dos elementos e pode variar com fontes, colunas ou layouts complexos; confira a cifra antes de continuar.
+                </p>
+              )}
               <span id="extracted-content-count" className="sr-only">
                 {contentBytes} bytes UTF-8; limite de {MAX_IMPORTED_TEXT_BYTES} bytes.
               </span>

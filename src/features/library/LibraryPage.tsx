@@ -16,6 +16,7 @@ import { isImportMusicDraft } from '../import-music/importMusicDraft';
 import type { ImportMusicDraft } from '../import-music/importMusicDraft';
 import { validateExtractedText } from '../import-music/fileImportValidation';
 import { createMusicSearchIndex, normalizeMusicSearchText } from './musicSearch';
+import { ExportActions } from '../export/ExportActions';
 
 type MusicForm = {
   titulo: string;
@@ -40,6 +41,15 @@ const emptyForm: MusicForm = {
 };
 
 const splitValues = (value: string) => value.split(',').map((item) => item.trim()).filter(Boolean);
+
+const SAVE_TIMEOUT_MS = 20000;
+
+function createMusicDocumentId(): string {
+  const uuid = typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `m-${uuid.replace(/-/g, '')}`;
+}
 
 function formFromMusic(music: MusicRecord): MusicForm {
   return {
@@ -97,7 +107,13 @@ export const LibraryPage = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const savingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timedOutRef = useRef<boolean>(false);
+  const saveOperationRef = useRef(0);
+  const consumedImportRef = useRef<ImportMusicDraft | null>(null);
+  const pendingDocumentId = useRef<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [includeExportMetadata, setIncludeExportMetadata] = useState(true);
 
   const loadMusics = useCallback(async () => {
     if (authLoading) return;
@@ -129,7 +145,15 @@ export const LibraryPage = () => {
     const draft = typeof state === 'object' && state !== null && 'importDraft' in state
       ? state.importDraft
       : null;
+
     if (!isImportMusicDraft(draft)) return;
+
+    if (consumedImportRef.current
+      && consumedImportRef.current.fileName === draft.fileName
+      && consumedImportRef.current.format === draft.format
+      && consumedImportRef.current.content === draft.content) return;
+
+    consumedImportRef.current = draft;
 
     try {
       validateExtractedText(draft.content, draft.format);
@@ -168,9 +192,12 @@ export const LibraryPage = () => {
   const openCreate = () => {
     setImportDraft(null);
     setEditingMusic(null);
-    setForm(emptyForm);
     setFormOpen(true);
     setError(null);
+    if (!timedOutRef.current) {
+      setForm(emptyForm);
+      pendingDocumentId.current = null;
+    }
   };
 
   const openEdit = (music: MusicRecord) => {
@@ -180,10 +207,12 @@ export const LibraryPage = () => {
     setFormOpen(true);
     setError(null);
     setViewingMusic(null);
+    pendingDocumentId.current = null;
   };
 
   const closeForm = () => {
     if (importDraft) {
+      pendingDocumentId.current = null;
       navigate('/importar', { state: { importDraft } });
       return;
     }
@@ -191,6 +220,7 @@ export const LibraryPage = () => {
     setForm(emptyForm);
     setFormOpen(false);
     setError(null);
+    pendingDocumentId.current = null;
   };
 
   const openDetails = async (id: string) => {
@@ -215,30 +245,80 @@ export const LibraryPage = () => {
     event.preventDefault();
     if (savingRef.current) return;
     savingRef.current = true;
+    timedOutRef.current = false;
+    const operationId = ++saveOperationRef.current;
     setSaving(true);
     setError(null);
+
+    const baseInput = inputFromForm(form, editingMusic ?? undefined);
+    const input = importDraft
+      ? { ...baseInput, origemTipo: 'upload_local' as const, arquivoNome: importDraft.fileName, driveFileId: null }
+      : baseInput;
+
+    if (!editingMusic) {
+      pendingDocumentId.current ??= createMusicDocumentId();
+    }
+
+    const write = editingMusic
+      ? updateMusic(editingMusic.id, input)
+      : createMusic(input, pendingDocumentId.current ? { documentId: pendingDocumentId.current } : undefined);
+
+    const confirmed = write.then(() => 'confirmed' as const);
+    confirmed.catch(() => undefined);
+
     try {
-      const baseInput = inputFromForm(form, editingMusic ?? undefined);
-      const input = importDraft
-        ? { ...baseInput, origemTipo: 'upload_local' as const, arquivoNome: importDraft.fileName, driveFileId: null }
-        : baseInput;
-      if (editingMusic) {
-        await updateMusic(editingMusic.id, input);
-        setNotice('Música atualizada.');
-      } else {
-        await createMusic(input);
-        setNotice(importDraft ? 'Música importada e salva na sua biblioteca.' : 'Música salva na sua biblioteca.');
+      const outcome = await Promise.race([
+        confirmed,
+        new Promise<'timeout'>((resolve) => {
+          savingTimerRef.current = setTimeout(() => {
+            timedOutRef.current = true;
+            resolve('timeout');
+          }, SAVE_TIMEOUT_MS);
+        }),
+      ]);
+
+      if (outcome === 'timeout') {
+        setError('O salvamento está demorando para ser confirmado. A gravação ainda pode estar sendo processada. Se o problema persistir, tente salvar novamente.');
+        savingRef.current = false;
+        setSaving(false);
+        setFormOpen(false);
+
+        write.then(() => {
+          if (operationId !== saveOperationRef.current || !timedOutRef.current) return;
+          timedOutRef.current = false;
+          void loadMusics();
+        }).catch(() => {
+          if (operationId !== saveOperationRef.current || !timedOutRef.current) return;
+          timedOutRef.current = false;
+          setError('Não foi possível salvar a música. Verifique sua conexão e tente novamente.');
+        });
+
+        return;
       }
+
       setImportDraft(null);
       setEditingMusic(null);
       setForm(emptyForm);
       setFormOpen(false);
+      setNotice(editingMusic
+        ? 'Música atualizada.'
+        : importDraft
+          ? 'Música importada e salva na sua biblioteca.'
+          : 'Música salva na sua biblioteca.');
+
+      pendingDocumentId.current = null;
       void loadMusics();
     } catch (saveError) {
       setError(errorMessage(saveError));
     } finally {
-      savingRef.current = false;
-      setSaving(false);
+      if (savingTimerRef.current) {
+        clearTimeout(savingTimerRef.current);
+        savingTimerRef.current = null;
+      }
+      if (!timedOutRef.current) {
+        savingRef.current = false;
+        setSaving(false);
+      }
     }
   };
 
@@ -334,6 +414,9 @@ export const LibraryPage = () => {
               <button type="button" onClick={() => void openDetails(music.id)} disabled={detailLoading} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-300">Ver Cifra</button>
             </div>
           </div>
+          <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <ExportActions music={music} includeMetadata={includeExportMetadata} onMetadataChange={setIncludeExportMetadata} />
+          </div>
         </article>)}
       </div>}
 
@@ -342,7 +425,7 @@ export const LibraryPage = () => {
       {formOpen && <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/50 p-3 sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) closeForm(); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="music-form-title" className="mx-auto my-3 flex max-h-[calc(100vh-1.5rem)] supports-[height:100dvh]:max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-900 sm:p-7">
           <div className="flex items-center justify-between gap-3"><div><h2 id="music-form-title" className="text-lg font-bold text-slate-900 dark:text-slate-100">{editingMusic ? 'Editar música' : 'Nova música'}</h2>{importDraft && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Conteúdo importado de {importDraft.fileName}; revise os dados antes de salvar.</p>}</div><button type="button" onClick={closeForm} disabled={saving} aria-label={importDraft ? 'Voltar à prévia' : 'Fechar'} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-5 h-5" /></button></div>
-          <form onSubmit={(event) => void handleSave(event)} className="mt-4 flex min-h-0 flex-1 flex-col">
+          <form aria-busy={saving} onSubmit={(event) => void handleSave(event)} className="mt-4 flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1">
             {error && <div role="alert" className="p-3 rounded-xl border border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200 text-sm">{error}</div>}
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Título <span className="text-rose-500">*</span><input required maxLength={200} value={form.titulo} onChange={(event) => setForm({ ...form, titulo: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" /></label>

@@ -11,6 +11,10 @@ O projeto é uma SPA React/TypeScript executada no navegador. Authentication e F
 - **Segurança:** `firestore.rules` valida caminhos por UID e payloads; o último match nega caminhos não especificados.
 - **Tipos:** modelos de documentos em `src/types/firestore.ts`.
 
+## Exportação local PDF e TXT (T10)
+
+`src/features/export/exportFormatters.ts` prepara conteúdo sem React ou Firebase e sem modificar a cifra. A exportação TXT usa Blob UTF-8 e LF. O PDF carrega `jspdf` dinamicamente quando solicitado e gera páginas A4 retrato em Courier, preferindo 14 pt e mantendo o mínimo em 12 pt. Linhas formadas apenas por tokens válidos de acordes recebem Courier Bold azul-escuro; texto misto e letras permanecem Courier normal preto. As larguras são medidas pelas métricas reais do estilo usado; linhas extensas viram painéis com cortes comuns a todas as linhas, sem reflow automático de `doc.text()`. Tabs são expandidas até a próxima parada de oito colunas. Linhas vazias consomem espaço, blocos cabem juntos quando possível, e pares adjacentes de acorde/letra são mantidos juntos no limite de página. `ExportActions.tsx` integra as opções à Biblioteca, playlists manuais e Modo Igreja; usa músicas em memória e não escreve no Firestore. Os dez momentos litúrgicos permanecem na ordem fixa, inclusive posições vazias. A inspeção manual de PDF e downloads em navegadores ainda precisa ser feita.
+
 ## Firestore
 
 Dados ficam em `usuarios/{uid}`: `musicas`, `playlists/{id}/itens`, `repertorios/{id}/itens` e `configuracoes/preferencias`. Listas usam subcoleções de itens. Não há catálogo público ou documentos globais no escopo atual. Veja o [modelo de dados](MODELO_DE_DADOS.md) e o [guia da integração](INTEGRACAO_FIRESTORE.md).
@@ -76,9 +80,10 @@ A importação aceita arquivos TXT, DOCX e PDF com camada de texto. O arquivo é
 
 Em `src/features/import-music/`:
 
-- `fileExtractors.ts` contém os extratores TXT, DOCX e PDF. TXT é decodificado como UTF-8; DOCX usa Mammoth para extrair texto bruto; PDF.js reconstitui linhas e espaços de forma heurística a partir da posição dos itens textuais.
+- `fileExtractors.ts` contém os extratores TXT, DOCX e PDF. TXT é decodificado como UTF-8; DOCX é lido localmente como OOXML com JSZip dentro de Worker; PDF.js ordena elementos por coordenadas e linha de base, detecta vales verticais centrais para separar duas colunas, calibra a grade por linhas textuais longas e infere estrofes pelas distâncias verticais. PDF proporcional e layouts complexos continuam sujeitos a estimativas.
+- A leitura OOXML percorre parágrafos, runs, tabs, quebras e tabelas de `word/document.xml`. Parágrafos adjacentes viram uma quebra simples; parágrafos vazios permanecem vazios; tabelas são serializadas por coluna (uma coluna inteira antes da seguinte). Tabs explícitas são expandidas em paradas fixas de quatro colunas para exibição monoespaçada; sequências internas de espaços em linhas de acordes são comprimidas pelo fator 0,65, e um parágrafo vazio entre acorde e letra é removido; as posições dos acordes são recalibradas pela largura proporcional estimada da letra seguinte (letras estreitas/espaços 0,85; letras largas 1,15), mantendo espaço entre acordes. Tab stops personalizados e propriedades visuais do Word não são reproduzidos.
 - `fileExtractorTypes.ts` define erros tipados usados pelos extratores e validações.
-- `fileImportValidation.ts` verifica formato, tamanho e conteúdo, e carrega os extratores/parsers sob demanda. Mammoth só é importado para DOCX e PDF.js/worker só para PDF.
+- `fileImportValidation.ts` verifica formato, tamanho e conteúdo, e carrega os extratores sob demanda. JSZip é carregado só para DOCX; PDF.js e seu worker só para PDF. O arquivo compactado e os parsers permanecem no dispositivo.
 - `importMusicDraft.ts` define e valida o rascunho textual e seus metadados mínimos para trânsito entre as telas.
 
 `ImportMusicPage.tsx` seleciona o arquivo, apresenta erros e a prévia editável e encaminha o texto, o nome original e o formato em estado de navegação. `LibraryPage.tsx` valida esse rascunho e preenche o formulário existente da T04; o salvamento continua explícito e usa o `musicRepository` atual. A música é gravada no mesmo modelo e fluxo da Biblioteca com `origemTipo: upload_local`, `arquivoNome` igual ao nome original e `driveFileId: null`. Somente texto editado e metadados seguem para a persistência; o arquivo binário não é armazenado.

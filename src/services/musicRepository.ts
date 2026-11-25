@@ -9,6 +9,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
@@ -17,6 +18,7 @@ import type { Music } from '../types/firestore';
 
 export type MusicInput = Omit<Music, 'createdAt' | 'updatedAt'>;
 export type MusicRecord = Music & { id: string };
+export type CreateMusicOptions = { documentId?: string };
 
 export class MusicRepositoryError extends Error {
   constructor(message: string, readonly code: string) {
@@ -152,14 +154,19 @@ export function createMusicRepository(
   }
 
   return {
-    async createMusic(input: MusicInput): Promise<string> {
+    async createMusic(input: MusicInput, options?: CreateMusicOptions): Promise<string> {
       try {
         const data = validateMusicInput(input);
-        const reference = await addDoc(userMusicCollection(), {
+        const payload = {
           ...data,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-        });
+        };
+        if (options?.documentId) {
+          await setDoc(musicDocument(options.documentId), payload);
+          return options.documentId;
+        }
+        const reference = await addDoc(userMusicCollection(), payload);
         return reference.id;
       } catch (error) {
         throw wrapPersistenceError(error);

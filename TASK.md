@@ -13,12 +13,12 @@ Política de Qualidade: Nenhuma tarefa é marcada como `CONCLUÍDA` sem testes a
 - [x] **T02 — Autenticação Firebase e proteção de rotas** `[CONCLUÍDA]`
 - [ ] **T03 — Modelo de dados Firestore e regras de segurança** `[CONCLUÍDA]`
 - [x] **T04 — Biblioteca de músicas, cadastro, pesquisa e visualização** `[CONCLUÍDA]`
-- [x] **T05 — Importação local de documentos (DOCX, PDF textual, TXT)** `[CONCLUÍDA]`
+- [ ] **T05 — Importação local de documentos (DOCX, PDF textual, TXT)** `[IMPLEMENTAÇÃO CONCLUÍDA; auditoria de fidelidade parcial]`
 - [x] **T06 — Playlists manuais (CRUD, ordenação e persistência)** `[CONCLUÍDA]`
 - [x] **T07 — Modo Igreja (10 momentos fixos e sugestões do catálogo)** `[CONCLUÍDA]`
 - [x] **T08 — Modo Barzinho (geração assistida com filtros e alternância)** `[CONCLUÍDA]`
 - [x] **T09 — Modo Palco e rolagem automática (autoscroll)** `[CONCLUÍDA]`
-- [ ] **T10 — Exportação PDF e TXT** `[PENDENTE]`
+- [ ] T10 — Exportação PDF e TXT `[EM VALIDAÇÃO; inspeção visual pendente]`
 - [ ] **T11 — Motor Musical e Capotraste Inteligente** `[PENDENTE]`
 - [ ] **T12 — Exportação DOCX e HTML** `[PENDENTE]`
 - [ ] **T13 — Integração Google Drive (OAuth Picker e escopos mínimos)** `[PENDENTE]`
@@ -150,21 +150,23 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição básica e
 
 ---
 
-### [x] T05 — Importação Local de Documentos (DOCX, PDF textual, TXT)
-- **Estado**: `CONCLUÍDA`
+### [ ] T05 — Importação Local de Documentos (DOCX, PDF textual, TXT)
+- **Estado**: `implementação concluída; fidelidade visual da origem não validada integralmente`
 - **Objetivo**: Processar localmente arquivos `.docx`, `.pdf` textual e `.txt`, permitindo extrair e editar o texto antes de encaminhá-lo ao formulário existente da Biblioteca e salvar somente após confirmação explícita.
 - **Dependências**: T04.
+- **Auditoria do salvamento (2026-11-24)**: revisão do fluxo encontrou `savingRef` como trava síncrona contra submissões concorrentes, estado de loading no botão, `try/catch/finally`, gravação via `await createMusic` e atualização da lista sem bloquear o fechamento do formulário. A extração não é repetida no cadastro. O congelamento relatado não foi reproduzido nem teve uma causa de bloqueio síncrono confirmada; os testes de regressão verificam resposta durante uma gravação pendente, submissão repetida, sucesso e retenção dos dados em erro. O carregamento de bibliotecas muito grandes continua sem paginação e pode custar tempo de renderização após uma atualização completa.
 - **Subtarefas**:
-  - [x] **T05.1 — Extratores**: TXT, DOCX (Mammoth) e PDF textual (PDF.js), com processamento local e carregamento sob demanda dos parsers.
+  - [x] **T05.1 — Extratores**: TXT, DOCX (OOXML/JSZip em Worker) e PDF textual (PDF.js), com processamento local e carregamento sob demanda.
   - [x] **T05.2 — Validações e limites**: formatos permitidos, arquivo até 5 MiB, conteúdo até 800.000 bytes UTF-8 e erros tipados para arquivos/conteúdo inválidos.
   - [x] **T05.3 — Interface e pré-visualização**: seleção, estados de extração, edição da prévia, revalidação após edição, limpeza e substituição de arquivo.
   - [x] **T05.4 — Integração com a Biblioteca**: encaminhar texto e nome do arquivo ao formulário existente; persistir pela T04 com `origemTipo: upload_local`, sem guardar o binário e mediante confirmação explícita.
   - [x] **T05.5 — Estabilização**: testes de extratores, validação, interface, integração, preservação do conteúdo em erros e regressão do cadastro manual/edição.
-  - [x] **T05.6 — Documentação e encerramento**: atualizar roadmap, arquitetura, limites/custos e descrição das funcionalidades.
+  - [x] **T05.6 — Documentação da auditoria**: atualizar roadmap, arquitetura e limites/custos; validação visual de documentos reais continua pendente.
+- **Auditoria de fidelidade (2026-11-24)**: extração DOCX usa OOXML para manter parágrafos vazios, tabs e células de tabela, emitindo tabelas por coluna; tabs são expandidas em paradas fixas de quatro colunas, espaços repetidos em linhas de acordes são comprimidos pelo fator 0,65 e um parágrafo vazio entre acorde e letra é removido; as posições dos acordes são recalibradas pela largura proporcional estimada da letra seguinte (letras estreitas/espaços 0,85; letras largas 1,15), mantendo espaço entre acordes. PDF separa duas colunas quando encontra vale central sem texto atravessando, calibra a grade pela mediana de linhas textuais longas e infere estrofes por delta Y. Fixtures sintéticas cobrem DOCX com tabela/tabs, PDF em duas colunas e PDF com medidas proporcionais. Layouts DOCX com tab stops personalizados/células mescladas e PDFs com títulos cruzando colunas ou mais de duas colunas seguem como limitações; a inspeção real de Missa de Emaús identificou os problemas corrigidos nesta revisão; o arquivo original não está disponível no repositório para uma conferência visual pós-correção, então a fidelidade visual final permanece pendente.
 - **Testes Obrigatórios**:
   - [x] Testes de extratores, validações e estados da interface para TXT, DOCX e PDF, incluindo arquivos inválidos, vazios, protegidos por senha e limites.
   - [x] Testes de integração do rascunho editado com o cadastro existente, confirmação explícita, retorno à prévia, erro de persistência e regressão do cadastro manual/edição.
-  - [x] Suíte geral: 94 testes aprovados; 25 testes Firestore aprovados com o emulador ativo.
+  - [x] Suíte geral desta auditoria: 237 testes aprovados; 46 testes de regras Firestore ignorados porque o emulador não estava configurado.
   - [x] `npm run typecheck`, `npm test`, `npm run build`, `npm run lint` e `git diff --check`.
 - **Critérios de Aceite**:
   - [x] Extração feita localmente, sem envio do documento a serviços externos; confirmação obrigatória antes de persistir pela T04.
@@ -279,19 +281,21 @@ Favoritos não fazem parte do escopo aprovado da T04. A transposição básica e
 - **Estado da T09**: `CONCLUÍDA`, com validação automatizada registrada acima e inspeção manual confirmada pelo usuário.
 
 ### [ ] T10 — Exportação PDF e TXT
-- **Estado**: `PENDENTE`
+- **Estado**: `EM VALIDACAO; inspecao visual do PDF pendente`
 - **Objetivo**: Implementar geração e download de arquivos em formato PDF (com jsPDF) e TXT puro para músicas individuais e playlists completas, mantendo rigorosamente títulos, acordes e ordem.
 - **Dependências**: T04, T06.
 - **Subtarefas**:
-  - [ ] Módulo gerador de PDF formatado para folha A4 com quebra de página inteligente.
-  - [ ] Exportação de playlist completa em PDF (com índice ou cabeçalhos ordenados).
-  - [ ] Módulo gerador de TXT puro com download imediato via Blob.
-  - [ ] Opção de incluir ou não metadados (tom, momento litúrgico, artista) no cabeçalho.
+  - [x] Formatadores puros para músicas, playlists ordenadas e dez momentos fixos de Igreja, sem mutação dos dados.
+  - [x] TXT UTF-8 via Blob, com LF, nome seguro e download local.
+  - [x] PDF jsPDF sob demanda, sempre A4 retrato, Courier em 14 pt quando cabe e mínimo de 12 pt, painéis dimensionados pelas métricas reais, linhas de acordes em negrito azul-escuro, paginação, cabeçalho e número de página.
+  - [x] Ações PDF/TXT e opção de metadados na Biblioteca, Playlists e Modo Igreja; estado de geração, bloqueio de repetição e mensagem de falha.
 - **Testes Obrigatórios**:
-  - [ ] Teste de geração dos blobs de PDF e TXT sem exceções.
-  - [ ] Validação da preservação de caracteres acentuados (UTF-8) e alinhamento de acordes.
+  - [x] Testes de formatação cobrem cifra literal, espaços/tabs, acentos, ordem, metadados, nomes e dez momentos vazios.
+  - [x] Typecheck, lint, suíte completa e build executados; 230 testes passaram e 46 testes de regras foram ignorados pela configuração atual.
+  - [ ] Inspeção manual do PDF e download real em navegadores desktop e dispositivos móveis.
 - **Critérios de Aceite**:
-  - Arquivos baixados são legíveis e respeitam a ordem da playlist.
+  - Ordem e dados em memória preservados; nenhuma escrita do Firestore é chamada durante exportação.
+  - Limitação: fontes Courier padrão do jsPDF podem não conter todos os símbolos musicais Unicode. Cortes horizontais comuns preservam o alinhamento relativo; cortes inevitáveis podem atravessar acordes ou palavras.
 
 ---
 
